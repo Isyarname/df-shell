@@ -492,7 +492,8 @@ body.buttons-mode .recents-dock { padding-bottom: 68px; }
 </head>
 <body>
 <aside class="panel">
-  <h1>Direct<span>Flow</span> shell</h1>
+    <h1 style="margin-bottom:10px">Direct<span>Flow</span> shell</h1>
+    <p style="font-size:11px;line-height:1.5;color:var(--dim);margin:0 0 18px;letter-spacing:.2px">Концепт жестового интерфейса</p>
   <h3>Жесты (мышью или пальцем)</h3>
   <div class="grow"><span>Домой</span><b id="lblHome">правый край ←</b></div>
   <div class="grow"><span>Назад</span><b>нижние 5% ↑</b></div>
@@ -504,8 +505,12 @@ body.buttons-mode .recents-dock { padding-bottom: 68px; }
   <div class="toggle" id="tMirror"><span>Зеркальный режим</span><div class="switch"></div></div>
   <div class="toggle" id="tButtons"><span>Три кнопки вместо жестов</span><div class="switch"></div></div>
   <div class="sep"></div>
-  <h3>О системе</h3>
-  <div style="font-size:11px;line-height:1.6;color:var(--dim)">Последовательный жестовый интерфейс. Нет шторки уведомлений и быстрых настроек — виджеты размещаются на рабочем столе. Все объекты (иконки и виджеты) — компоненты единой сетки.</div>
+  <h3>Ключевые особенности</h3>
+  <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;font-size:11px;line-height:1.5;color:var(--dim)">
+    <li style="display:flex;gap:8px"><span style="color:var(--acc);flex:none">•</span><span>Единое меню виджетов и ярлыков</span></li>
+    <li style="display:flex;gap:8px"><span style="color:var(--acc);flex:none">•</span><span>Уведомления и настройки на рабочем столе</span></li>
+    <li style="display:flex;gap:8px"><span style="color:var(--acc);flex:none">•</span><span>Согласованные анимации</span></li>
+  </ul>
 </aside>
 <div class="fit" id="fit">
   <div class="stage" id="stage">
