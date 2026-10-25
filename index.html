@@ -1,0 +1,2603 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DirectFlow shell</title>
+<style>
+:root {
+  --z-base: 0; --z-slot: 2; --z-tile: 3; --z-dim: 50; --z-gallery: 100; --z-app: 200;
+  --z-recents-backdrop: 499; --z-recents: 500;
+  --z-ghost: 600; --z-trash: 700; --z-gesture: 900; --z-zone: 950; --z-nav: 980;
+  --z-indicator: 1000; --z-status: 1100; --z-toast: 1200;
+
+  --cols: 4; --gap: 12px; --row-h: 82px;
+  --device-w: 400px; --device-h: 760px;
+
+  --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 24px; --r-2xl: 28px; --r-device: 44px;
+
+  --fs-xs: 11px; --fs-sm: 12px; --fs-md: 13px; --fs-lg: 15px; --fs-xl: 19px; --fs-2xl: 26px;
+
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --dur-fast: .12s; --dur-slow: .28s; --dur-modal: .32s;
+  --t-move: left var(--dur-slow) var(--ease), top var(--dur-slow) var(--ease),
+            width var(--dur-slow) var(--ease), height var(--dur-slow) var(--ease);
+
+  --bg-glass: rgba(0, 0, 0, 0.15);
+  --blur-md: blur(12px); --blur-lg: blur(18px); --blur-2xl: blur(30px);
+
+  --bevel: inset 0 1px 0 rgba(255,255,255,.25), inset 0 -1px 0 rgba(0,0,0,.20), 0 1px 2px rgba(0,0,0,.40);
+  --bevel-pressed: inset 0 1px 0 rgba(255,255,255,.10), inset 0 -1px 0 rgba(0,0,0,.35);
+
+  --df-icon-size: 64px; --df-icon-color: rgba(0, 0, 0, .7);
+  --df-duration-fast: 160ms;
+
+  --txt: #eef2f8; --dim: #98a2b3; --acc: #8bd5ff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body {
+  height: 100%;
+  background: #0b0d12; color: var(--txt);
+  padding: 20px; gap: 44px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  background-image:
+    radial-gradient(900px 600px at 15% 10%, #162033 0, transparent 60%),
+    radial-gradient(800px 700px at 90% 90%, #102a2c 0, transparent 55%);
+}
+@media (min-width: 900px) and (orientation: landscape) {
+  body { flex-direction: row; padding: 30px 40px; gap: 44px; }
+}
+.panel { width: 272px; flex: none; max-height: 100%; overflow: auto; padding: 10px; }
+.panel h1 { font-size: var(--fs-2xl); margin: 0 0 18px; letter-spacing: -.6px; color: var(--txt); }
+.panel h1 span { color: var(--acc); }
+.panel h3 { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 1.4px; color: var(--dim); margin: 22px 0 10px; }
+.grow { display: flex; justify-content: space-between; gap: 10px; font-size: var(--fs-sm); padding: 7px 0; color: #c6cede; }
+.grow b { font-weight: 500; color: #fff; }
+.toggle { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-sm); padding: 9px 0; cursor: pointer; color: #c6cede; user-select: none; }
+.switch { width: 36px; height: 21px; border-radius: 20px; background: #2a3345; position: relative; transition: .2s; flex: none; }
+.switch:after { content: ""; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: #8792a6; transition: .2s; }
+.toggle.on .switch { background: #2b6d8a; }
+.toggle.on .switch:after { left: 18px; background: var(--acc); }
+.sep { height: 1px; background: #ffffff12; margin: 10px 0; }
+.fit { position: relative; flex: none; display: flex; justify-content: center; align-items: center;
+  width: var(--device-w); height: var(--device-h); max-width: 100%; max-height: 100%; }
+.stage { width: var(--device-w); height: var(--device-h); transform-origin: center center; transition: transform .2s ease; }
+.device { width: 100%; height: 100%; border-radius: var(--r-device); position: relative;
+  box-shadow: 0 0 0 9px #171b23, 0 0 0 11px #394152, 0 0 0 13px #0d1017, 0 40px 90px #000a; }
+.screen { position: absolute; inset: 0; border-radius: var(--r-device); overflow: hidden;
+  background: #0a1020; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.no-anim { transition: none !important; }
+body.mirror .zone-right { right: auto; left: 0; }
+body.mirror .gi-right { right: auto; left: 0; background: linear-gradient(to right, #fff9, transparent); }
+.wallpaper { position: absolute; inset: 0; overflow: hidden; z-index: var(--z-base);
+  background: linear-gradient(150deg, #3f5f82 0, #141629 100%); }
+.dim {
+  position: absolute; inset: 0; z-index: var(--z-dim);
+  border-radius: var(--r-device); background: rgba(0, 0, 0, .25);
+  opacity: 0; pointer-events: none; transition: opacity .3s var(--ease);
+}
+.dim.is-on { opacity: 1; pointer-events: auto; }
+.status {
+  position: absolute; top: 0; left: 0; right: 0; height: 44px; padding: 0 30px;
+  z-index: var(--z-status); display: flex; justify-content: space-between; align-items: center;
+  font-size: var(--fs-lg); font-weight: 400; pointer-events: none;
+}
+.status .right { display: flex; gap: 6px; align-items: center; }
+.bars { display: inline-flex; gap: 1px; align-items: flex-end; height: 10px; }
+.bars span { width: 3px; background: #fff; border-radius: 1px; }
+.bars span:nth-child(1) { height: 3px; } .bars span:nth-child(2) { height: 5px; }
+.bars span:nth-child(3) { height: 7px; } .bars span:nth-child(4) { height: 10px; }
+.home { position: absolute; top: 44px; left: 0; right: 0; bottom: 0; z-index: 10; padding: 12px 16px 56px; }
+.viewport { position: relative; flex: 1; height: 100%; overflow: auto; scrollbar-width: none; touch-action: none; }
+.viewport::-webkit-scrollbar { display: none; }
+.grid { position: relative; width: 100%; touch-action: none; }
+.tile { position: absolute; left: 0; top: 0; z-index: var(--z-tile); touch-action: none; cursor: pointer;
+  transition: var(--t-move); outline: none; }
+.tile-face {
+  position: absolute; inset: 0; border-radius: var(--r-xl); overflow: hidden;
+  display: flex; background: var(--bg-glass);
+  backdrop-filter: var(--blur-lg); -webkit-backdrop-filter: var(--blur-lg);
+  transition: transform .18s var(--ease), opacity .18s var(--ease);
+}
+.tile.is-source { z-index: 1; pointer-events: none; }
+.tile.is-source .tile-face { opacity: 0; transform: scale(.94); }
+.widget-base { padding: 14px 16px; width: 100%; height: 100%; }
+.widget-row { display: flex; align-items: center; justify-content: space-between; }
+.widget-col { display: flex; flex-direction: column; gap: 4px; }
+.text-xs { font-size: var(--fs-xs); font-weight: 400; opacity: .9; }
+.text-muted { opacity: .6; font-weight: 300; }
+.icon-box { display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.15); border-radius: var(--r-sm); }
+.icon-box svg { width: 16px; height: 16px; fill: currentColor; }
+.face-app { flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: transparent !important; border: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
+.face-app .glyph { display: grid; place-items: center;
+  width: var(--df-icon-size); height: var(--df-icon-size);
+  background: transparent; box-shadow: none;
+  transition: filter var(--df-duration-fast) var(--ease),
+              transform var(--df-duration-fast) var(--ease); }
+.face-app .glyph svg { width: 100%; height: 100%; display: block; }
+.face-app .caption { position: absolute; left: 0; right: 0; bottom: 0; max-width: 100%; padding: 0 4px;
+  overflow: hidden; font-size: var(--fs-xs); font-weight: 100; line-height: 1.2; letter-spacing: .2px;
+  text-align: center; white-space: nowrap; text-overflow: ellipsis; color: #fff; opacity: .4; }
+.tile.is-pressed .face-app .glyph { filter: brightness(.78); }
+@media (prefers-reduced-motion: reduce) {
+  .face-app .glyph { transition: filter var(--df-duration-fast) linear; }
+  .tile.is-pressed .face-app .glyph { transform: none; }
+}
+.df-icon { display: grid; place-items: center; color: var(--df-icon-color); box-shadow: var(--bevel);
+  transition: filter var(--df-duration-fast) var(--ease), box-shadow var(--df-duration-fast) var(--ease); }
+.df-icon svg { fill: currentColor; display: block; }
+.df-icon:active { filter: brightness(0.75); box-shadow: var(--bevel-pressed); }
+.face-quick { flex-direction: row; align-items: center; justify-content: space-around; padding: 8px 10px; }
+.qs-btn { width: 46px; height: 46px; flex: none; border-radius: 50%;
+  background: linear-gradient(160deg, #7cc8ff, #3574d6); }
+.qs-btn svg { width: 22px; height: 22px; }
+.qs-btn:not(.is-on) { filter: saturate(0.2) brightness(0.4); }
+.qs-btn.is-on { filter: none; }
+.face-notices { flex-direction: column; justify-content: flex-start; gap: 8px; padding: 14px 16px; text-align: left; }
+.face-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px;
+  font-size: 11px; font-weight: 500; color: #fff; }
+.face-head .text-muted { font-size: 10px; opacity: .5; font-weight: 400; }
+.notice { display: flex; align-items: center; gap: 10px; padding: 3px 6px; min-height: 34px;
+  border-radius: 8px; font-size: 11px; line-height: 1.25; color: rgba(255,255,255,.85); }
+.notice > span:last-child { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.notice b { font-weight: 600; color: #fff; }
+.notice-icon { width: 26px; height: 26px; flex: none; border-radius: 7px; display: grid; place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.2); }
+.notice-icon svg { width: 15px; height: 15px; fill: #fff !important; }
+.notice-icon:active { filter: none; box-shadow: none; }
+.notice-icon--telegram { background: linear-gradient(160deg, #63e0a6, #1fa971); }
+.notice-icon--mail     { background: linear-gradient(160deg, #7cc8ff, #3574d6); }
+.notice-icon--news     { background: linear-gradient(160deg, #ff9966, #d32f2f); }
+.face-weather .temp { font-size: 28px; font-weight: 200; line-height: 1; }
+.weather-glyph svg { width: 36px; height: 36px; fill: currentColor; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
+.live-time { font-size: 26px; font-weight: 200; line-height: 1; }
+.clock-glyph svg { width: 30px; height: 30px; fill: currentColor; }
+
+.slot {
+  position: absolute; left: 0; top: 0; z-index: var(--z-slot);
+  border-radius: var(--r-xl); background: rgba(255, 255, 255, .13);
+  pointer-events: none;
+}
+.slot.is-icon { background: transparent; border-radius: 0; }
+.slot-icon-silhouette {
+  position: absolute; left: 50%; top: 50%;
+  width: var(--df-icon-size); height: var(--df-icon-size);
+  transform: translate(-50%, -50%); pointer-events: none;
+  opacity: .30;
+}
+.slot-icon-silhouette svg { width: 100%; height: 100%; display: block;
+    filter: brightness(0);
+}
+
+.ghost { position: absolute; left: 0; top: 0; z-index: var(--z-ghost); pointer-events: none;
+  will-change: transform; transform-origin: center center; }
+.ghost .tile-face {
+  border-color: rgba(255,255,255,.28);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  background: rgba(24, 30, 44, 0.78);
+  box-shadow: 0 22px 34px rgba(0,0,0,.55);
+}
+.ghost .face-app {
+  background: transparent !important; box-shadow: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+.screen.is-dragging .tile:not(.is-source) .tile-face { border-color: rgba(255,255,255,.2); }
+.empty { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
+  align-items: center; justify-content: center; text-align: center; font-size: var(--fs-md); opacity: .55;
+  pointer-events: none; }
+.text-btn {
+  background: linear-gradient(160deg, #7cc8ff, #3574d6);
+  border: 0; color: var(--df-icon-color); border-radius: 999px; padding: 8px 14px;
+  font-size: var(--fs-xs); font-weight: 600; cursor: pointer; box-shadow: var(--bevel);
+  transition: filter var(--df-duration-fast) var(--ease), box-shadow var(--df-duration-fast) var(--ease);
+}
+.text-btn:active { filter: brightness(.75); box-shadow: var(--bevel-pressed); }
+.gallery {
+  position: absolute; left: 0; right: 0; top: 44px; bottom: 0; z-index: var(--z-gallery);
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: var(--blur-2xl); -webkit-backdrop-filter: var(--blur-2xl);
+  border-radius: var(--r-2xl) var(--r-2xl) var(--r-device) var(--r-device);
+  overflow: hidden; display: flex; flex-direction: column;
+  transform: translateY(100%); visibility: hidden;
+  transition: transform var(--dur-modal) var(--ease), visibility 0s var(--dur-modal);
+  box-shadow: 0 -12px 40px #0008; overscroll-behavior: contain;
+}
+.gallery.is-open { transform: translateY(0); visibility: visible; transition: transform var(--dur-modal) var(--ease); }
+.gallery.is-direct { transition: none; }
+.gallery-head { padding: 14px 18px 12px; border-bottom: 1px solid #ffffff14; flex: none; }
+.gallery-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.gallery-title { font-size: 20px; font-weight: 400; }
+.home-btn {
+  border: 0; background: linear-gradient(160deg, #7cc8ff, #3574d6);
+  color: var(--df-icon-color); border-radius: 999px; padding: 9px 16px;
+  font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+  cursor: pointer; box-shadow: var(--bevel);
+  transition: filter var(--df-duration-fast) var(--ease), box-shadow var(--df-duration-fast) var(--ease);
+}
+.home-btn:active { filter: brightness(.75); box-shadow: var(--bevel-pressed); }
+.search { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--r-xs); padding: 10px 12px; color: #fff; font-size: var(--fs-md); outline: none; }
+.search:focus { border-color: var(--acc); }
+.search::placeholder { color: #ffffff60; }
+.gallery-body { flex: 1; overflow-y: auto; padding: 14px 18px 28px;
+  touch-action: pan-y; scrollbar-width: none; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; cursor: grab; }
+.gallery-body:active { cursor: grabbing; }
+.gallery-body::-webkit-scrollbar { display: none; }
+.gallery-section { margin-bottom: 18px; }
+.gallery-section h4 { font-size: var(--fs-md); text-transform: uppercase; letter-spacing: .8px;
+  opacity: .55; margin-bottom: 10px; }
+.gallery-grid { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: var(--gap); width: 100%; }
+.gallery-tile { position: relative !important; left: auto !important; top: auto !important;
+  width: auto !important; height: auto !important;
+  grid-column: span var(--w); grid-row: span var(--h);
+  min-height: calc(var(--row-h) * var(--h) + var(--gap) * (var(--h) - 1));
+  cursor: grab; touch-action: pan-y; -webkit-user-drag: none; user-select: none; }
+.gallery-note { font-size: var(--fs-xs); opacity: .5; line-height: 1.6; margin-top: 14px; text-align: center; }
+.app { position: absolute; inset: 0; z-index: var(--z-app); border-radius: var(--r-device);
+  overflow: hidden; background: #f2f2f7; color: #111;
+  display: flex; flex-direction: column; will-change: transform, opacity; }
+.app-head { padding: 58px 18px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff;
+  display: flex; align-items: center; gap: 12px; flex: none; }
+.app-icon { width: 42px; height: 42px; border-radius: var(--r-md);
+  background: rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center; }
+.app-icon svg { width: 24px; height: 24px; fill: currentColor; }
+.app-name { font-size: var(--fs-xl); font-weight: 500; flex: 1; }
+.app-body { flex: 1; overflow-y: auto; padding: 16px; touch-action: pan-y; }
+.hint { background: #0a84ff18; color: #0a60c0; border-left: 3px solid #039be5;
+  padding: 11px; border-radius: 9px; font-size: var(--fs-xs); line-height: 1.6; margin-bottom: 12px; }
+.card { background: #fff; border-radius: var(--r-lg); padding: 14px; margin-bottom: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 3px #00000008; }
+.card h3 { font-size: var(--fs-lg); margin-bottom: 5px; }
+.card p { font-size: var(--fs-sm); color: #666; line-height: 1.6; }
+.chat { display: flex; gap: 10px; align-items: center; }
+.chat .avatar { width: 38px; height: 38px; border-radius: 50%; background: rgba(52,199,89,0.2);
+  display: flex; align-items: center; justify-content: center; }
+.chat .avatar svg { width: 20px; height: 20px; fill: currentColor; }
+.chat b { font-size: var(--fs-md); display: block; }
+.chat span { font-size: var(--fs-xs); color: #777; }
+.address { background: #e9e9ef; border-radius: 10px; padding: 10px; font-size: var(--fs-sm);
+  color: #555; margin-bottom: 12px; }
+.gi { position: absolute; pointer-events: none; opacity: 0; transition: opacity .15s; z-index: var(--z-gesture); }
+.gi.is-on { opacity: 1; }
+.gi-right { right: 0; top: 16%; width: 3px; height: 68%; background: linear-gradient(to left, #fff9, transparent); }
+.gi-bottom { bottom: 0; left: 10%; right: 10%; height: 3px; background: linear-gradient(to top, #fff9, transparent); }
+.gi-left { left: 0; top: 16%; width: 3px; height: 68%; background: linear-gradient(to right, #fff9, transparent); }
+body.mirror .gi-left { left: auto; right: 0; background: linear-gradient(to left, #fff9, transparent); }
+.zone { position: absolute; z-index: var(--z-zone); touch-action: none; }
+.zone-right { right: 0; top: 16%; width: 22px; height: 67%; }
+.zone-left { left: 0; top: 16%; width: 22px; height: 67%; }
+body.mirror .zone-left { left: auto; right: 0; }
+.zone-bottom { bottom: 0; left: 0; width: 100%; height: 36px; }
+body.buttons-mode .zone-right, body.buttons-mode .zone-bottom, body.buttons-mode .zone-left { display: none; }
+body.recents-open .zone { pointer-events: none; }
+.home-indicator { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  width: 134px; height: 5px; border-radius: 3px; background: #ffffff80;
+  z-index: var(--z-indicator); pointer-events: none; }
+body.buttons-mode .home-indicator { display: none; }
+.nav-buttons {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 48px;
+  z-index: var(--z-nav); background: #000;
+  display: none; align-items: center; justify-content: space-around; padding: 0 24px;
+}
+body.buttons-mode .nav-buttons { display: flex; }
+.nav-btn {
+  width: 48px; height: 48px; background: transparent; border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.85); cursor: pointer; padding: 0;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.nav-btn svg { width: 24px; height: 24px; display: block; }
+.nav-btn:active { background: rgba(255,255,255,0.15); color: #fff; }
+.trash {
+  position: absolute; bottom: 26px; left: 50%; transform: translate(-50%, 14px);
+  z-index: var(--z-trash); width: 230px; padding: 12px; text-align: center;
+  border-radius: var(--r-lg); font-size: var(--fs-sm); background: #00000080;
+  backdrop-filter: var(--blur-md); opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s var(--ease), background .2s, border-color .2s;
+}
+.screen.is-dragging .trash { opacity: 1; transform: translate(-50%, 0); }
+.trash.is-target { background: #ff3b3055; border-color: #ff7a70; transform: translate(-50%, 0) scale(1.05); }
+.toast { position: absolute; top: 52px; left: 50%; transform: translate(-50%, -8px); z-index: var(--z-toast);
+  background: #ffffffea; color: #111; padding: 9px 14px; border-radius: 20px;
+  font-size: var(--fs-xs); font-weight: 400; opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s var(--ease); white-space: nowrap; }
+.toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 820px) { .panel { display: none; } body { gap: 0; } }
+
+.recents-backdrop {
+  position: absolute; inset: 0; z-index: var(--z-recents-backdrop);
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s var(--ease);
+}
+.recents-backdrop.is-on { opacity: 1; pointer-events: auto; }
+
+.recents-dock {
+  position: absolute; top: 0; left: 0; bottom: 0; width: 55%;
+  z-index: var(--z-recents);
+  transform: translateX(-100%);
+  transition: transform .32s var(--ease);
+  display: flex; flex-direction: column;
+  padding: 60px 0 20px;
+  background: linear-gradient(to right,
+    rgba(10, 10, 14, 0.95) 0%,
+    rgba(10, 10, 14, 0.80) 55%,
+    rgba(10, 10, 14, 0.55) 80%,
+    rgba(10, 10, 14, 0) 100%);
+  touch-action: none;
+  will-change: transform;
+  -webkit-user-select: none; user-select: none;
+}
+.recents-dock.is-open { transform: translateX(0); }
+.recents-dock.is-direct { transition: none; }
+body.mirror .recents-dock {
+  left: auto; right: 0;
+  transform: translateX(100%);
+  background: linear-gradient(to left,
+    rgba(10, 10, 14, 0.95) 0%,
+    rgba(10, 10, 14, 0.80) 55%,
+    rgba(10, 10, 14, 0.55) 80%,
+    rgba(10, 10, 14, 0) 100%);
+}
+body.mirror .recents-dock.is-open { transform: translateX(0); }
+body.buttons-mode .recents-dock { padding-bottom: 68px; }
+
+.recents-list {
+  flex: 1; overflow-y: auto; padding: 0 16px;
+  display: flex; flex-direction: column; gap: 14px;
+  justify-content: flex-end;
+  scrollbar-width: none;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+.recents-list::-webkit-scrollbar { display: none; }
+.recents-empty {
+  text-align: center; padding: 40px 12px; opacity: .5;
+  font-size: 12px; line-height: 1.5;
+}
+.recent-card {
+  display: flex; flex-direction: column;
+  position: relative; flex-shrink: 0;
+  cursor: pointer;
+  transition: transform .2s var(--ease), opacity .2s var(--ease);
+  touch-action: none;
+}
+.recent-card.removing {
+  transform: translateX(120%) !important;
+  opacity: 0 !important;
+  pointer-events: none;
+  transition: transform .25s var(--ease), opacity .25s var(--ease);
+}
+.recent-thumb {
+  width: 100%; height: 140px;
+  border-radius: 14px; overflow: hidden;
+  position: relative;
+  background: #1c1c1e;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.recent-screen {
+  position: absolute; top: 0; left: 0;
+  width: 400px; height: 760px;
+  transform: scale(0.47);
+  transform-origin: top left;
+  pointer-events: none;
+  overflow: hidden !important;
+}
+.recent-info {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 2px 2px;
+}
+.recent-icon {
+  width: 35px; height: 35px;
+  display: grid; place-items: center; flex: none;
+  background: transparent;
+  box-shadow: none;
+}
+.recent-icon svg { width: 100%; height: 100%; display: block; }
+.recent-title { font-size: 13px; opacity: .95; font-weight: 500; color: #fff; }
+
+.app-body--messages { padding: 0; background: #f2f2f7; }
+.msg-search-wrap { padding: 10px 16px 12px; }
+.msg-search-bar { display: flex; align-items: center; gap: 8px;
+  background: #e3e3e8; border-radius: 10px; padding: 8px 12px; color: #8e8e93; font-size: 14px; }
+.msg-search-bar svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+.msg-list { background: #fff; }
+.msg-item { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #e5e5ea; }
+.msg-item:active { background: #f0f0f5; }
+.msg-item:last-child { border-bottom: 0; }
+.msg-avatar { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
+  color: #fff; font-weight: 600; font-size: 16px; flex: none; }
+.msg-body { flex: 1; min-width: 0; }
+.msg-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.msg-name { font-size: 15px; font-weight: 600; color: #111; }
+.msg-time { font-size: 11px; color: #8e8e93; flex: none; }
+.msg-preview { font-size: 13px; color: #8e8e93; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-badge { min-width: 20px; height: 20px; border-radius: 10px; background: #0a84ff; color: #fff;
+  font-size: 11px; font-weight: 600; display: grid; place-items: center; padding: 0 6px; flex: none; margin-left: 6px; }
+.app-body--browser { padding: 0; background: #f2f2f7; }
+.browser-search { display: flex; align-items: center; gap: 8px; background: #e3e3e8; border-radius: 10px;
+  padding: 10px 14px; color: #8e8e93; font-size: 14px; margin: 12px 16px 22px; }
+.browser-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  color: #8e8e93; padding: 0 16px; margin-bottom: 12px; font-weight: 600; }
+.browser-favs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 8px; padding: 0 16px; }
+.browser-fav { display: flex; flex-direction: column; align-items: center; gap: 6px;
+  font-size: 11px; color: #444; text-align: center; }
+.browser-fav .fav-icon { width: 54px; height: 54px; border-radius: 12px; display: grid; place-items: center;
+  background: #fff; box-shadow: 0 1px 4px #0001; font-size: 24px; }
+.browser-tabs { margin: 24px 16px 0; background: #fff; border-radius: 12px; padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px #00000008; }
+.browser-tab-thumb { width: 40px; height: 40px; border-radius: 8px;
+  background: linear-gradient(135deg, #667eea, #764ba2); flex: none; }
+.browser-tab-info { flex: 1; min-width: 0; }
+.browser-tab-info b { font-size: 13px; display: block; }
+.browser-tab-info span { font-size: 11px; color: #8e8e93; }
+.app-body--camera { padding: 0; background: #0a0a0c; display: flex; flex-direction: column; position: relative; }
+.camera-view { flex: 1; position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #2a3a4a 0%, #0a0a0c 70%), #0a0a0c;
+  display: flex; flex-direction: column; justify-content: flex-end; }
+.camera-view::after { content: ''; position: absolute; inset: 20% 30%; border: 1px solid #ffffff22;
+  border-radius: 4px; pointer-events: none; }
+.camera-view::before { content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 120px; height: 120px; border: 2px solid #ffd60a66; border-radius: 50%; pointer-events: none; }
+.camera-modes { display: flex; justify-content: center; gap: 20px; color: #fff; font-size: 12px;
+  padding: 14px 0 16px; opacity: .5; position: relative; z-index: 2; }
+.camera-modes span.active { opacity: 1; font-weight: 600; color: #ffd60a; }
+.camera-controls { display: flex; align-items: center; justify-content: space-around;
+  padding: 0 30px 24px; position: relative; z-index: 2; }
+.camera-shutter { width: 66px; height: 66px; border-radius: 50%; border: 4px solid #fff;
+  background: transparent; position: relative; cursor: pointer; padding: 0; }
+.camera-shutter::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: #fff; }
+.camera-thumb { width: 46px; height: 46px; border-radius: 8px;
+  background: linear-gradient(135deg, #4b5563, #1f2937); border: 2px solid #ffffff40; }
+.camera-flip { width: 46px; height: 46px; border-radius: 50%; background: #ffffff18; display: grid;
+  place-items: center; color: #fff; border: 0; cursor: pointer; }
+.camera-flip svg { width: 22px; height: 22px; fill: currentColor; }
+.app-body--music { padding: 0; background: linear-gradient(180deg, #f8f8fc, #e8e8ee);
+  display: flex; flex-direction: column; }
+.music-player { display: flex; flex-direction: column; align-items: center; padding: 20px 24px 24px; flex: 1; }
+.music-art { width: 100%; max-width: 240px; aspect-ratio: 1; border-radius: 14px;
+  background: linear-gradient(135deg, #fb923c 0%, #7c2d12 100%);
+  box-shadow: 0 14px 32px #0003; margin: 8px 0 22px; display: grid; place-items: center;
+  color: #ffffff40; position: relative; overflow: hidden; }
+.music-art::after { content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 30% 30%, #ffffff25, transparent 60%); }
+.music-art svg { width: 80px; height: 80px; fill: currentColor; }
+.music-title { font-size: 19px; font-weight: 600; color: #111; }
+.music-artist { font-size: 13px; color: #8e8e93; margin-top: 4px; }
+.music-progress { width: 100%; height: 4px; background: #00000015; border-radius: 2px; margin: 22px 0 6px; position: relative; }
+.music-progress::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 35%;
+  background: #111; border-radius: 2px; }
+.music-times { display: flex; justify-content: space-between; width: 100%; font-size: 10px; color: #8e8e93; }
+.music-controls { display: flex; align-items: center; justify-content: center; gap: 26px; margin-top: 22px; }
+.music-btn { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+  background: transparent; color: #111; border: 0; cursor: pointer; padding: 0; }
+.music-btn.primary { background: #111; color: #fff; width: 56px; height: 56px; }
+.music-btn svg { width: 22px; height: 22px; fill: currentColor; }
+.music-btn.primary svg { width: 24px; height: 24px; margin-left: 2px; }
+.app-body--messages, .app-body--browser, .app-body--music { padding-top: 44px; }
+.app-body--camera { padding-top: 0; }
+</style>
+</head>
+<body>
+<aside class="panel">
+  <h1>Direct<span>Flow</span> shell</h1>
+  <h3>Жесты (мышью или пальцем)</h3>
+  <div class="grow"><span>Домой</span><b id="lblHome">правый край ←</b></div>
+  <div class="grow"><span>Назад</span><b>нижние 5% ↑</b></div>
+  <div class="grow"><span>Недавние</span><b id="lblRecents">левый край →</b></div>
+  <div class="grow"><span>Меню виджетов</span><b>свайп вверх по фону</b></div>
+  <div class="grow"><span>Переместить</span><b>удержание 450 мс</b></div>
+  <div class="sep"></div>
+  <h3>Система</h3>
+  <div class="toggle" id="tMirror"><span>Зеркальный режим</span><div class="switch"></div></div>
+  <div class="toggle" id="tButtons"><span>Три кнопки вместо жестов</span><div class="switch"></div></div>
+  <div class="sep"></div>
+  <h3>О системе</h3>
+  <div style="font-size:11px;line-height:1.6;color:var(--dim)">Последовательный жестовый интерфейс. Нет шторки уведомлений и быстрых настроек — виджеты размещаются на рабочем столе. Все объекты (иконки и виджеты) — компоненты единой сетки.</div>
+</aside>
+<div class="fit" id="fit">
+  <div class="stage" id="stage">
+    <div class="device">
+      <div class="screen" id="screen">
+        <div class="wallpaper"></div>
+        <div class="dim" id="dim"></div>
+        <div class="status">
+          <span id="statusTime">9:41</span>
+          <div class="right">
+            <span class="bars"><span></span><span></span><span></span><span></span></span>
+            <span style="font-size:11px">5G</span>
+            <span style="font-size:12px">100%</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" style="fill:#fff"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
+          </div>
+        </div>
+        <section class="home" id="home">
+          <div class="viewport" id="viewport">
+            <div class="grid" id="grid"></div>
+            <div class="slot" id="slot" hidden></div>
+            <div class="empty" id="empty" hidden>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="rgba(255,255,255,0.4)"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+              <span>Рабочий стол пуст</span>
+            </div>
+          </div>
+        </section>
+        <div class="gallery" id="gallery" inert>
+          <div class="gallery-head">
+            <div class="gallery-title-row">
+              <div class="gallery-title">Виджеты</div>
+              <button class="text-btn" id="resetBtn" type="button">Сбросить стол</button>
+            </div>
+            <input class="search" id="search" type="search" placeholder="Поиск виджетов и приложений" autocomplete="off">
+          </div>
+          <div class="gallery-body" id="galleryBody"></div>
+        </div>
+        <div class="app" id="app" hidden>
+          <div class="app-body" id="appBody"></div>
+        </div>
+
+        <div class="recents-backdrop" id="recentsBackdrop"></div>
+        <div class="recents-dock" id="recentsDock" aria-hidden="true">
+          <div class="recents-list" id="recentsList"></div>
+        </div>
+
+        <div class="gi gi-right" id="giRight"></div>
+        <div class="gi gi-bottom" id="giBottom"></div>
+        <div class="gi gi-left" id="giLeft"></div>
+        <div class="zone zone-right" id="zoneRight"></div>
+        <div class="zone zone-left" id="zoneLeft"></div>
+        <div class="zone zone-bottom" id="zoneBottom"></div>
+        <div class="nav-buttons">
+          <button class="nav-btn" id="navBack" aria-label="Назад">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg>
+          </button>
+          <button class="nav-btn" id="navHome" aria-label="Домой">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 L12 3 L21 11"/><path d="M5 10 V20 H19 V10"/></svg>
+          </button>
+          <button class="nav-btn" id="navRecents" aria-label="Недавние">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16 H4 V4 H16 V8"/><rect x="8" y="8" width="12" height="12"/></svg>
+          </button>
+        </div>
+        <div class="trash" id="trash">Перетащите сюда, чтобы убрать</div>
+        <div class="toast" id="toast"></div>
+        <div class="home-indicator"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+'use strict';
+
+/* ═══════════════════════════════════════════════
+   1. CONSTANTS
+   ═══════════════════════════════════════════════ */
+const COLS = 4;
+const ROWS = 7;
+const GAP = 12;
+const ROW_H = 82;
+const LONG_PRESS = 450;
+const TAP_SLOP = 8;
+const EASE = 'cubic-bezier(.22,.61,.36,1)';
+const STORAGE_KEY = 'directflow.shell.v7';
+const STORAGE_VERSION = 7;
+const STATE = Object.freeze({ IDLE: 'IDLE', MENU: 'MENU', APP: 'APP' });
+const APP_SLIDE_MS = 280;
+const RECENTS_TRANSITION_MS = 320;
+const GHOST_LIFETIME_MS = 340;
+
+/* ═══════════════════════════════════════════════
+   2. DOM
+   ═══════════════════════════════════════════════ */
+const $ = (sel, root = document) => root.querySelector(sel);
+const screenEl = $('#screen');
+const grid = $('#grid');
+const viewport = $('#viewport');
+const slot = $('#slot');
+const gallery = $('#gallery');
+const dim = $('#dim');
+const appEl = $('#app');
+const appBody = $('#appBody');
+const trash = $('#trash');
+const emptyEl = $('#empty');
+const toastEl = $('#toast');
+const galleryBody = $('#galleryBody');
+const searchInput = $('#search');
+const stage = $('#stage');
+
+/* ═══════════════════════════════════════════════
+   3. UTILITIES
+   ═══════════════════════════════════════════════ */
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const haptic = (ms = 8) => { try { navigator.vibrate?.(ms); } catch (e) {} };
+
+function cellW() {
+  return (grid.clientWidth - GAP * (COLS - 1)) / COLS;
+}
+function screenScale() {
+  return screenEl.getBoundingClientRect().width / screenEl.offsetWidth;
+}
+function toScreenPoint(clientX, clientY) {
+  const r = screenEl.getBoundingClientRect();
+  const s = screenScale();
+  return { x: (clientX - r.left) / s, y: (clientY - r.top) / s };
+}
+function isOverTrash(clientX, clientY) {
+  const r = trash.getBoundingClientRect();
+  return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+}
+
+let toastTimer = 0;
+function toast(text) {
+  clearTimeout(toastTimer);
+  toastEl.textContent = text;
+  toastEl.classList.add('is-on');
+  toastTimer = setTimeout(() => toastEl.classList.remove('is-on'), 1500);
+}
+
+/* ═══════════════════════════════════════════════
+   3.1 SILHOUETTE FOR SLOT
+   ─────────────────────────────────────────────
+   Из иконки удаляются <defs> и все ссылки на них
+   (filter/fill/stroke="url(#…)").
+
+   Это критично: SVG в слоте должен быть «чистым».
+   Иначе id из <defs> (msgShadow, msgBodyGrad,
+   brShadow, musBandGrad, musCupGrad, camShadow,
+   camBtnShadow, camLensShadow) дублируются в DOM.
+   Слот стоит ПЕРЕД галереей и «Недавними», поэтому
+   после удаления одноимённой плитки единственная
+   копия <defs> остаётся в скрытом (display: none)
+   слоте — url(#…) из него браузер не резолвит,
+   и иконки в меню/недавних теряют заливки и тени.
+
+   Внешне силуэт всё равно чёрный — через
+   CSS filter: brightness(0). Градиенты и тени
+   ему не нужны, так что вырезание безвредно.
+   ═══════════════════════════════════════════════ */
+function silhouetteFromIcon(iconSvg) {
+  try {
+    const doc = new DOMParser().parseFromString(iconSvg, 'image/svg+xml');
+    const svg = doc.documentElement;
+    if (!svg || svg.nodeName.toLowerCase() !== 'svg') return '';
+    svg.querySelectorAll('defs').forEach(d => d.remove());
+    svg.querySelectorAll('[filter]').forEach(el => el.removeAttribute('filter'));
+    svg.querySelectorAll('[fill^="url("]').forEach(el => el.removeAttribute('fill'));
+    svg.querySelectorAll('[stroke^="url("]').forEach(el => el.removeAttribute('stroke'));
+    return svg.outerHTML;
+  } catch (e) {
+    return '';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   4. DATA
+   ═══════════════════════════════════════════════ */
+const APPS = {
+  messages: { name: 'Сообщения', tags: 'чат смс переписка',
+    icon: `<svg viewBox="0 0 48 48">
+      <defs>
+        <filter id="msgShadow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="3" stdDeviation="1" flood-color="#000000" flood-opacity="0.4"/>
+        </filter>
+        <linearGradient id="msgBodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#22cd75"/>
+          <stop offset="100%" stop-color="#0a9e58"/>
+        </linearGradient>
+      </defs>
+      <g filter="url(#msgShadow)">
+        <path d="M 6.17 14.17 A 4 4 0 0 1 9 13 L 39 13 A 4 4 0 0 1 41.83 14.17 L 38.6 11.65 Q 37.8 11.1 36.8 11.1 L 11.2 11.1 Q 10.2 11.1 9.4 11.65 Z" fill="#8de873"/>
+        <path d="M 9 13 L 39 13 A 4 4 0 0 1 43 17 L 43 35 A 4 4 0 0 1 39 39 L 27 39 L 21 44 L 21 39 L 9 39 A 4 4 0 0 1 5 35 L 5 17 A 4 4 0 0 1 9 13 Z" fill="url(#msgBodyGrad)"/>
+      </g>
+    </svg>` },
+
+  browser: { name: 'Браузер', tags: 'интернет веб сайты',
+    icon: `<svg viewBox="0 0 48 48">
+      <defs>
+        <filter id="brShadow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="3" stdDeviation="1" flood-color="#000000" flood-opacity="0.4"/>
+        </filter>
+      </defs>
+      <g filter="url(#brShadow)">
+        <g fill="none" stroke="#60a5fa" stroke-width="0.8" opacity="0.5">
+          <path d="M 21.05 8.83 A 2.95 1.25 0 0 1 26.95 8.83"/>
+          <path d="M 15.5 10.66 A 8.5 3.59 0 0 1 32.5 10.66"/>
+          <path d="M 10.98 14.10 A 13.02 5.5 0 0 1 37.02 14.10"/>
+          <path d="M 8.02 18.73 A 15.98 6.75 0 0 1 39.98 18.73"/>
+          <path d="M 7 24 A 17 7.18 0 0 1 41 24"/>
+          <path d="M 8.02 29.27 A 15.98 6.75 0 0 1 39.98 29.27"/>
+          <path d="M 10.98 33.90 A 13.02 5.5 0 0 1 37.02 33.90"/>
+          <path d="M 15.5 37.34 A 8.5 3.59 0 0 1 32.5 37.34"/>
+          <path d="M 21.05 39.17 A 2.95 1.25 0 0 1 26.95 39.17"/>
+        </g>
+        <g fill="none" stroke="#60a5fa" stroke-width="0.8">
+          <path d="M 21.05 8.83 A 2.95 1.25 0 0 0 26.95 8.83"/>
+          <path d="M 15.5 10.66 A 8.5 3.59 0 0 0 32.5 10.66"/>
+          <path d="M 10.98 14.10 A 13.02 5.5 0 0 0 37.02 14.10"/>
+          <path d="M 8.02 18.73 A 15.98 6.75 0 0 0 39.98 18.73"/>
+          <path d="M 7 24 A 17 7.18 0 0 0 41 24"/>
+          <path d="M 8.02 29.27 A 15.98 6.75 0 0 0 39.98 29.27"/>
+          <path d="M 10.98 33.90 A 13.02 5.5 0 0 0 37.02 33.90"/>
+          <path d="M 15.5 37.34 A 8.5 3.59 0 0 0 32.5 37.34"/>
+          <path d="M 21.05 39.17 A 2.95 1.25 0 0 0 26.95 39.17"/>
+        </g>
+      </g>
+    </svg>` },
+
+  camera: { name: 'Камера', tags: 'фото видео съёмка снимки',
+    icon: `<svg viewBox="0 0 48 48">
+      <defs>
+        <filter id="camShadow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="3" stdDeviation="1" flood-color="#000000" flood-opacity="0.4"/>
+        </filter>
+        <filter id="camBtnShadow" x="-100%" y="-100%" width="300%" height="300%">
+          <feDropShadow dx="0" dy="0.8" stdDeviation="0.5" flood-color="#000000" flood-opacity="0.35"/>
+        </filter>
+        <filter id="camLensShadow" x="-100%" y="-100%" width="300%" height="300%">
+          <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.5"/>
+        </filter>
+      </defs>
+      <g filter="url(#camShadow)">
+        <path d="M 6.17 14.17 A 4 4 0 0 1 9 13 L 9 13.5 L 39 13.5 L 39 13 A 4 4 0 0 1 41.83 14.17 L 38.6 11.65 Q 37.8 11.1 36.8 11.1 L 11.2 11.1 Q 10.2 11.1 9.4 11.65 Z" fill="#e8ecf0"/>
+        <rect x="5" y="13" width="38" height="26" rx="4" fill="#9aa5b1"/>
+      </g>
+      <ellipse cx="13" cy="11.35" rx="3.2" ry="1.3" fill="#6f7a86"/>
+      <ellipse cx="13" cy="11" rx="3" ry="0.95" fill="#cdd4db"/>
+      <circle cx="36.5" cy="18" r="2" fill="#e8ecf0" filter="url(#camBtnShadow)"/>
+      <circle cx="24" cy="26" r="9" fill="#6b7581" filter="url(#camLensShadow)"/>
+      <circle cx="24" cy="26" r="7" fill="#1f2937"/>
+      <circle cx="24" cy="26" r="4" fill="#60a5fa" fill-opacity="0.35"/>
+    </svg>` },
+
+  music: { name: 'Музыка', tags: 'плеер песни треки прослушивание',
+    icon: `<svg viewBox="0 0 48 48">
+      <defs>
+        <linearGradient id="musBandGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ea580c"/>
+          <stop offset="100%" stop-color="#9a3412"/>
+        </linearGradient>
+        <linearGradient id="musCupGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ea580c"/>
+          <stop offset="100%" stop-color="#c2410c"/>
+        </linearGradient>
+        <filter id="musShadow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="3" stdDeviation="1" flood-color="#000000" flood-opacity="0.4"/>
+        </filter>
+      </defs>
+      <path d="M 8 25.2 A 16 16 0 0 1 40 25.2 L 34.5 25.2 A 10.5 10.5 0 0 0 13.5 25.2 Z" fill="url(#musBandGrad)" filter="url(#musShadow)"/>
+      <path d="M 8 25.2 A 16 16 0 0 1 40 25.2 L 40 24 A 16 16 0 0 0 8 24 Z" fill="#fb923c"/>
+      <path d="M 6.88 26.88 A 3 3 0 0 1 9 26 L 14 26 A 3 3 0 0 1 16.12 26.88 L 13.5 25.2 L 8 25.2 Z" fill="#fb923c"/>
+      <rect x="6" y="26" width="11" height="13" rx="3" fill="url(#musCupGrad)" filter="url(#musShadow)"/>
+      <rect x="8.5" y="29" width="6" height="7" rx="2" fill="#1a1a1c"/>
+      <path d="M 31.88 26.88 A 3 3 0 0 1 34 26 L 39 26 A 3 3 0 0 1 41.12 26.88 L 40 25.2 L 34.5 25.2 Z" fill="#fb923c"/>
+      <rect x="31" y="26" width="11" height="13" rx="3" fill="url(#musCupGrad)" filter="url(#musShadow)"/>
+      <rect x="33.5" y="29" width="6" height="7" rx="2" fill="#1a1a1c"/>
+    </svg>` }
+};
+
+const TYPES = {
+  quick:         { w: 4, h: 1, name: 'Быстрые настройки', tags: 'система wi-fi bluetooth фонарь' },
+  notifications: { w: 4, h: 2, name: 'Уведомления',       tags: 'система почта telegram новости' },
+  weather:       { w: 2, h: 1, name: 'Погода',            tags: 'погода время температура москва' },
+  clock:         { w: 2, h: 1, name: 'Часы',              tags: 'погода время часы дата' }
+};
+
+const QS = [
+  { id: 'wifi',      icon: '<svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>', label: 'Wi-Fi' },
+  { id: 'bluetooth', icon: '<svg viewBox="0 0 24 24"><path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/></svg>', label: 'Bluetooth' },
+  { id: 'plane',     icon: '<svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>', label: 'Авиарежим' },
+  { id: 'flash',     icon: '<svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>', label: 'Фонарь' },
+  { id: 'location',  icon: '<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>', label: 'Геолокация' }
+];
+const qsState = { wifi: true, bluetooth: true, plane: false, flash: false, location: true };
+
+/* ═══════════════════════════════════════════════
+   5. STATE
+   ═══════════════════════════════════════════════ */
+const tiles = new Map();
+let items = [];
+let positions = new Map();
+let state = STATE.IDLE;
+let gesture = null;
+let drag = null;
+let galleryGesture = null;
+let touchPull = null;
+let mousePull = null;
+let edge = null;
+let mirrorMode = false;
+let buttonsMode = false;
+let committing = false;
+let closing = false;
+let currentApp = null;
+
+function setState(s) {
+  state = s;
+  dim.classList.toggle('is-on', s === STATE.MENU);
+}
+
+/* ═══════════════════════════════════════════════
+   6. PERSISTENCE
+   ═══════════════════════════════════════════════ */
+function save() {
+  try {
+    const pos = {};
+    for (const [id, p] of positions) {
+      pos[id] = { col: p.col, row: p.row, w: p.w, h: p.h };
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      v: STORAGE_VERSION,
+      items,
+      positions: pos,
+      qs: qsState,
+      mirror: mirrorMode,
+      buttons: buttonsMode,
+      recents
+    }));
+  } catch (e) {}
+}
+
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (!raw || raw.v !== STORAGE_VERSION || !Array.isArray(raw.items)) return null;
+
+    const list = raw.items
+      .filter(i => i.type === 'app' ? !!APPS[i.app] : !!TYPES[i.type])
+      .map(i => {
+        const t = TYPES[i.type];
+        return {
+          id: String(i.id),
+          type: i.type,
+          app: i.app,
+          w: i.type === 'app' ? 1 : t.w,
+          h: i.type === 'app' ? 1 : t.h
+        };
+      });
+    if (!list.length) return null;
+
+    const map = new Map();
+    for (const [id, p] of Object.entries(raw.positions || {})) {
+      if (!list.some(i => i.id === id)) continue;
+      if (!p || ![p.col, p.row, p.w, p.h].every(Number.isInteger)) return null;
+      if (p.col < 0 || p.row < 0 || p.col + p.w > COLS || p.row + p.h > ROWS) return null;
+      map.set(id, { id, col: p.col, row: p.row, w: p.w, h: p.h });
+    }
+    if (map.size !== list.length) return null;
+
+    const arr = [...map.values()];
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        if (overlaps(arr[i], arr[j])) return null;
+      }
+    }
+    Object.assign(qsState, raw.qs || {});
+    return {
+      items: list,
+      positions: map,
+      mirror: !!raw.mirror,
+      buttons: !!raw.buttons,
+      recents: Array.isArray(raw.recents) ? raw.recents.filter(k => APPS[k]) : []
+    };
+  } catch (e) {
+    console.warn('DirectFlow shell: failed to load state', e);
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   7. GRID LAYOUT
+   ═══════════════════════════════════════════════ */
+const overlaps = (a, b) =>
+  a.col < b.col + b.w && a.col + a.w > b.col &&
+  a.row < b.row + b.h && a.row + a.h > b.row;
+
+const overlapsAny = (p, list) => list.some(o => overlaps(p, o));
+
+function findFree(occupied, w, h) {
+  for (let row = 0; row <= ROWS - h; row++) {
+    for (let col = 0; col <= COLS - w; col++) {
+      const p = { col, row, w, h };
+      if (!overlapsAny(p, occupied)) return p;
+    }
+  }
+  return null;
+}
+
+function pack(list) {
+  const occupied = [];
+  const out = new Map();
+  for (const it of list) {
+    const p = findFree(occupied, it.w, it.h);
+    if (!p) continue;
+    out.set(it.id, { ...p, id: it.id });
+    occupied.push({ ...p, id: it.id });
+  }
+  return out;
+}
+
+function findNewPosition(original, obstacles) {
+  const { w, h } = original;
+  const maxRow = ROWS - h;
+  const maxCol = COLS - w;
+  const c0 = clamp(original.col, 0, maxCol);
+  const r0 = clamp(original.row, 0, maxRow);
+
+  const free = (c, r) => !overlapsAny({ col: c, row: r, w, h }, obstacles);
+
+  if (free(c0, r0)) return { col: c0, row: r0 };
+
+  for (let r = r0 + 1; r <= maxRow; r++) {
+    if (free(c0, r)) return { col: c0, row: r };
+  }
+  for (let d = 1; d <= maxCol; d++) {
+    if (c0 - d >= 0 && free(c0 - d, r0)) return { col: c0 - d, row: r0 };
+    if (c0 + d <= maxCol && free(c0 + d, r0)) return { col: c0 + d, row: r0 };
+  }
+  for (let r = r0 + 1; r <= maxRow; r++) {
+    for (let d = 1; d <= maxCol; d++) {
+      if (c0 - d >= 0 && free(c0 - d, r)) return { col: c0 - d, row: r };
+      if (c0 + d <= maxCol && free(c0 + d, r)) return { col: c0 + d, row: r };
+    }
+  }
+  return null;
+}
+
+function resolveWithHole(hole) {
+  const all = items
+    .filter(i => i.id !== hole.id)
+    .map(i => {
+      const p = positions.get(i.id);
+      return p ? { id: i.id, col: p.col, row: p.row, w: i.w, h: i.h } : null;
+    })
+    .filter(Boolean);
+
+  all.sort((a, b) => {
+    const aOver = overlaps(a, hole) ? 0 : 1;
+    const bOver = overlaps(b, hole) ? 0 : 1;
+    return aOver - bOver || a.row - b.row || a.col - b.col;
+  });
+
+  const out = new Map([[hole.id, { ...hole }]]);
+  const occupied = [{ ...hole }];
+
+  for (const o of all) {
+    if (!overlapsAny(o, occupied)) {
+      out.set(o.id, { ...o });
+      occupied.push({ ...o });
+      continue;
+    }
+    const otherObstacles = all
+      .filter(x => x.id !== o.id && !out.has(x.id))
+      .map(x => ({ col: x.col, row: x.row, w: x.w, h: x.h }));
+
+    const pos = findNewPosition(o, [...occupied, ...otherObstacles]);
+
+    if (pos) {
+      const placed = { ...o, col: pos.col, row: pos.row };
+      out.set(o.id, placed);
+      occupied.push(placed);
+    } else {
+      out.set(o.id, { ...o });
+      occupied.push({ ...o });
+    }
+  }
+  return out;
+}
+
+function place(el, p) {
+  const cw = cellW();
+  el.style.left = (p.col * (cw + GAP)) + 'px';
+  el.style.top  = (p.row * (ROW_H + GAP)) + 'px';
+  el.style.width  = (p.w * cw + (p.w - 1) * GAP) + 'px';
+  el.style.height = (p.h * ROW_H + (p.h - 1) * GAP) + 'px';
+}
+
+function applyLayout(map, instant = false) {
+  if (!map) return;
+  for (const [id, p] of map) {
+    const el = tiles.get(id);
+    if (!el) continue;
+    if (instant) el.classList.add('no-anim');
+    place(el, p);
+    if (instant) requestAnimationFrame(() => el.classList.remove('no-anim'));
+  }
+  grid.style.height = (ROWS * (ROW_H + GAP) - GAP) + 'px';
+  emptyEl.hidden = items.length > 0;
+}
+
+/* ═══════════════════════════════════════════════
+   8. RENDERING
+   ═══════════════════════════════════════════════ */
+const WIDGET_RENDERERS = {
+  app: (it) => {
+    const a = APPS[it.app];
+    return `<div class="tile-face face-app face-${it.app}">
+      <span class="glyph">${a.icon}</span>
+      <span class="caption">${a.name}</span>
+    </div>`;
+  },
+  quick: () => `<div class="tile-face face-quick">${QS.map(q => `
+    <span class="qs-btn df-icon ${qsState[q.id] ? 'is-on' : ''}" data-qs="${q.id}" role="button" aria-pressed="${!!qsState[q.id]}" aria-label="${q.label}">${q.icon}</span>`).join('')}</div>`,
+  notifications: () => `<div class="tile-face face-notices widget-base">
+    <div class="face-head widget-row"><span>Уведомления</span><span class="text-muted">Сегодня</span></div>
+    <div class="notice"><span class="notice-icon notice-icon--telegram df-icon"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></span><span><b>Telegram</b> · Алексей: Привет!</span></div>
+    <div class="notice"><span class="notice-icon notice-icon--mail df-icon"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></span><span><b>Mail</b> · Новый отчёт готов</span></div>
+    <div class="notice"><span class="notice-icon notice-icon--news df-icon"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg></span><span><b>News</b> · 5 новых статей</span></div>
+  </div>`,
+  weather: () => `<div class="tile-face face-weather widget-base widget-row">
+    <div class="widget-col">
+      <div class="city text-xs">Москва</div>
+      <div class="widget-row" style="gap:6px; align-items:baseline"><span class="temp">+12°</span><span class="condition text-xs text-muted">Облачно</span></div>
+    </div>
+    <span class="weather-glyph"><svg viewBox="0 0 24 24"><path d="M12 7c0-2.76-2.24-5-5-5S2 4.24 2 7s2.24 5 5 5h.71c.44 1.58 1.36 2.95 2.61 3.93-.21.64-.32 1.32-.32 2.07 0 2.76 2.24 5 5 5s5-2.24 5-5c0-.75-.11-1.43-.32-2.07 1.25-.98 2.17-2.35 2.61-3.93H19c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5z"/></svg></span>
+  </div>`,
+  clock: () => `<div class="tile-face face-clock widget-base widget-row">
+    <div class="widget-col">
+      <span class="clock-label text-xs text-muted">Санкт-Петербург</span>
+      <span class="live-time">00:00</span>
+    </div>
+    <span class="clock-glyph"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg></span>
+  </div>`
+};
+
+function faceHTML(it) {
+  return (WIDGET_RENDERERS[it.type] || WIDGET_RENDERERS.clock)(it);
+}
+
+function createTileElement(item, extraClass = '') {
+  const el = document.createElement('div');
+  el.className = 'tile' + (extraClass ? ' ' + extraClass : '');
+  el.dataset.id = item.id;
+  if (item.app) el.dataset.app = item.app;
+  el.innerHTML = faceHTML(item);
+  return el;
+}
+
+function createGalleryTile(item) {
+  const el = document.createElement('div');
+  el.className = 'tile gallery-tile';
+  el.dataset.source = 'gallery';
+  if (item.app) el.dataset.app = item.app;
+  else el.dataset.type = item.type;
+  el.style.setProperty('--w', item.w);
+  el.style.setProperty('--h', item.h);
+  el.innerHTML = faceHTML(item);
+  el.addEventListener('pointerdown', handleGalleryPointerDown);
+  return el;
+}
+
+function mountItems() {
+  grid.replaceChildren();
+  tiles.clear();
+  for (const it of items) {
+    const el = createTileElement(it);
+    grid.appendChild(el);
+    tiles.set(it.id, el);
+  }
+}
+
+function defaultItems() {
+  return [
+    { id: 'quick-1',      type: 'quick',         w: 4, h: 1 },
+    { id: 'notices-1',    type: 'notifications', w: 4, h: 2 },
+    { id: 'app-messages', type: 'app', app: 'messages', w: 1, h: 1 },
+    { id: 'app-browser',  type: 'app', app: 'browser',  w: 1, h: 1 },
+    { id: 'app-camera',   type: 'app', app: 'camera',   w: 1, h: 1 },
+    { id: 'app-music',    type: 'app', app: 'music',    w: 1, h: 1 }
+  ];
+}
+
+function resetDesktop() {
+  items = defaultItems();
+  positions = pack(items);
+  Object.assign(qsState, { wifi: true, bluetooth: true, plane: false, flash: false, location: true });
+  mountItems();
+  applyLayout(positions, true);
+  viewport.scrollTop = 0;
+  save();
+  toast('Рабочий стол сброшен');
+}
+
+/* ═══════════════════════════════════════════════
+   9. DRAG & DROP
+   ═══════════════════════════════════════════════ */
+function releaseCapture(id) {
+  if (id == null) return;
+  for (const el of [grid, galleryBody, gallery]) {
+    try { if (el.hasPointerCapture(id)) el.releasePointerCapture(id); } catch (e) {}
+  }
+}
+
+/* Очищаем слот полностью — в т.ч. innerHTML.
+   Силуэт теперь без <defs> (см. silhouetteFromIcon),
+   так что дополнительный id в DOM не появится даже
+   при быстром переключении drag → drop → drag. */
+function clearDragVisual() {
+  screenEl.classList.remove('is-dragging');
+  trash.classList.remove('is-target');
+  slot.hidden = true;
+  slot.innerHTML = '';
+  slot.classList.remove('is-icon');
+}
+
+function clearSourceMarks() {
+  for (const el of tiles.values()) el.classList.remove('is-source');
+}
+
+function scheduleFrame() {
+  if (drag && !drag.raf) drag.raf = requestAnimationFrame(frame);
+}
+
+function frame() {
+  if (!drag) return;
+  drag.raf = 0;
+  updateDrag(drag.x, drag.y);
+}
+
+function placeSlot(p) {
+  slot.hidden = false;
+  place(slot, p);
+}
+
+/* ═══════════════════════════════════════════════
+   Подсветка места вставки.
+
+   Для ярлыка используется «чистый» силуэт без <defs>
+   и ссылок url(#…) — иначе в DOM появляются дубли
+   id из иконок (msgShadow и т.п.) и после удаления
+   одноимённой плитки url(#…) перестают резолвиться
+   в галерее и «Недавних».
+   ═══════════════════════════════════════════════ */
+function setupSlotShape(itemData) {
+  const isIcon = itemData.type === 'app';
+  slot.classList.toggle('is-icon', isIcon);
+  if (isIcon) {
+    const a = APPS[itemData.app];
+    const clean = a ? silhouetteFromIcon(a.icon) : '';
+    slot.innerHTML = `<div class="slot-icon-silhouette">${clean}</div>`;
+  } else {
+    slot.innerHTML = '';
+  }
+}
+
+function updateDrag(clientX, clientY) {
+  if (!drag) return;
+
+  const { x: px, y: py } = toScreenPoint(clientX, clientY);
+  const gx = px - drag.grabX;
+  const gy = py - drag.grabY;
+  drag.ghost.style.transform = `translate3d(${gx}px, ${gy}px, 0) scale(1.05)`;
+
+  if (isOverTrash(clientX, clientY)) {
+    trash.classList.add('is-target');
+    slot.hidden = true;
+    drag.slotPlaced = false;
+    return;
+  }
+  trash.classList.remove('is-target');
+  slot.hidden = false;
+
+  const gr = grid.getBoundingClientRect();
+  const { x: ox, y: oy } = toScreenPoint(gr.left, gr.top);
+  const cw = cellW();
+  const col = clamp(Math.round((gx - ox) / (cw + GAP)), 0, COLS - drag.w);
+  const row = clamp(Math.round((gy - oy) / (ROW_H + GAP)), 0, ROWS - drag.h);
+
+  if (!drag.hole || drag.hole.col !== col || drag.hole.row !== row) {
+    const hole = { id: drag.id, col, row, w: drag.w, h: drag.h };
+    drag.hole = hole;
+    drag.layout = resolveWithHole(hole);
+    applyLayout(drag.layout);
+    placeSlot(hole);
+    drag.slotPlaced = true;
+  }
+}
+
+function initDrag(el, itemData, { fromMenu = false, clientX, clientY } = {}) {
+  if (fromMenu) closeGallery();
+  if (drag) return;
+
+  el.classList.remove('is-pressed');
+  el.classList.add('is-source');
+
+  const ghost = document.createElement('div');
+  ghost.className = 'ghost';
+  const computed = window.getComputedStyle(el);
+  ghost.style.width = computed.width;
+  ghost.style.height = computed.height;
+  ghost.innerHTML = el.querySelector('.tile-face').outerHTML;
+  screenEl.appendChild(ghost);
+
+  const rect = el.getBoundingClientRect();
+  const s = screenScale();
+
+  drag = {
+    id: itemData.id,
+    item: itemData,
+    w: itemData.w,
+    h: itemData.h,
+    ghost,
+    grabX: (clientX - rect.left) / s,
+    grabY: (clientY - rect.top) / s,
+    x: clientX,
+    y: clientY,
+    hole: null,
+    layout: null,
+    raf: 0,
+    slotPlaced: false,
+    fromMenu
+  };
+
+  setupSlotShape(itemData);
+  screenEl.classList.add('is-dragging');
+  haptic(14);
+  updateDrag(clientX, clientY);
+}
+
+function abortDrag() {
+  if (!drag) {
+    clearDragVisual();
+    clearSourceMarks();
+    applyLayout(positions);
+    return;
+  }
+  cancelAnimationFrame(drag.raf);
+  drag.ghost.remove();
+  const wasFromMenu = drag.fromMenu;
+  drag = null;
+  clearDragVisual();
+  if (!wasFromMenu) {
+    clearSourceMarks();
+    applyLayout(positions);
+  }
+}
+
+function finishDrag(clientX, clientY) {
+  if (!drag) return;
+  const d = drag;
+  updateDrag(clientX, clientY);
+  cancelAnimationFrame(d.raf);
+  d.raf = 0;
+
+  if (trash.classList.contains('is-target')) {
+    drag = null;
+    if (!d.fromMenu) removeItem(d.id);
+    d.ghost.remove();
+    clearDragVisual();
+    if (!d.fromMenu) clearSourceMarks();
+    haptic(12);
+    if (!d.fromMenu) toast('Плитка убрана');
+    return;
+  }
+
+  if (!d.layout) {
+    if (d.fromMenu) {
+      drag = null;
+      d.ghost.remove();
+      clearDragVisual();
+    } else {
+      abortDrag();
+    }
+    return;
+  }
+
+  const finalPos = d.layout.get(d.id) || d.hole;
+
+  const sr = screenEl.getBoundingClientRect();
+  const gr = grid.getBoundingClientRect();
+  const s  = screenScale();
+  const ox = (gr.left - sr.left) / s;
+  const oy = (gr.top  - sr.top ) / s;
+  const cw = cellW();
+
+  const tx = ox + finalPos.col * (cw + GAP);
+  const ty = oy + finalPos.row * (ROW_H + GAP);
+  const tw = finalPos.w * cw + (finalPos.w - 1) * GAP;
+  const th = finalPos.h * ROW_H + (finalPos.h - 1) * GAP;
+
+  let targetEl = null;
+  if (d.fromMenu) {
+    const it = { ...d.item, id: d.id };
+    items.push(it);
+    positions = d.layout;
+
+    targetEl = createTileElement(it, 'no-anim');
+    grid.appendChild(targetEl);
+    tiles.set(it.id, targetEl);
+
+    place(targetEl, finalPos);
+    targetEl.style.opacity = '0';
+    targetEl.style.pointerEvents = 'none';
+  } else {
+    positions = d.layout;
+  }
+
+  committing = true;
+  drag = null;
+
+  d.ghost.style.transition = `transform .24s ${EASE}, width .24s ${EASE}, height .24s ${EASE}`;
+  void d.ghost.offsetWidth;
+  d.ghost.style.width = tw + 'px';
+  d.ghost.style.height = th + 'px';
+  d.ghost.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(1)`;
+
+  const displayName = d.item.type === 'app'
+    ? (APPS[d.item.app]?.name || '')
+    : (TYPES[d.item.type]?.name || '');
+
+  setTimeout(() => {
+    d.ghost.remove();
+    if (d.fromMenu && targetEl) {
+      targetEl.style.opacity = '';
+      targetEl.style.pointerEvents = '';
+      targetEl.classList.remove('no-anim');
+      toast(displayName + ' добавлен');
+    } else {
+      const tile = tiles.get(d.id);
+      const face = tile?.querySelector('.tile-face');
+      if (face) face.style.transition = 'none';
+      tile?.classList.remove('is-source');
+      if (face) {
+        void face.offsetWidth;
+        face.style.transition = '';
+      }
+    }
+    clearDragVisual();
+    committing = false;
+    save();
+    haptic(8);
+  }, 245);
+}
+
+function removeItem(id) {
+  items = items.filter(i => i.id !== id);
+  tiles.get(id)?.remove();
+  tiles.delete(id);
+  const next = new Map();
+  for (const it of items) {
+    const p = positions.get(it.id);
+    if (p) next.set(it.id, { ...p, id: it.id });
+  }
+  positions = next;
+  applyLayout(positions);
+  save();
+}
+
+/* ═══════════════════════════════════════════════
+   10. GRID EVENTS
+   ═══════════════════════════════════════════════ */
+function cancelGesture() {
+  if (!gesture) return;
+  clearTimeout(gesture.timer);
+  if (gesture.el) gesture.el.classList.remove('is-pressed');
+  releaseCapture(gesture.pointerId);
+  gesture = null;
+  if (drag) abortDrag();
+}
+
+function cancelAllGestures() {
+  if (galleryGesture) {
+    clearTimeout(galleryGesture.timer);
+    galleryGesture.el.classList.remove('is-pressed');
+    releaseCapture(galleryGesture.pointerId);
+    galleryGesture = null;
+  }
+  if (gesture) {
+    clearTimeout(gesture.timer);
+    if (gesture.el) gesture.el.classList.remove('is-pressed');
+    releaseCapture(gesture.pointerId);
+    gesture = null;
+  }
+  if (drag) abortDrag();
+}
+
+grid.addEventListener('pointerdown', e => {
+  if (state !== STATE.IDLE || gesture || drag || committing || recentsOpen) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+  const tile = e.target.closest('.tile');
+  e.preventDefault();
+  try { grid.setPointerCapture(e.pointerId); } catch (err) {}
+
+  if (!tile) {
+    gesture = {
+      mode: 'pan',
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      lastY: e.clientY,
+      up: 0
+    };
+    return;
+  }
+
+  const it = items.find(i => i.id === tile.dataset.id);
+  if (!it) return;
+
+  gesture = {
+    mode: 'tile',
+    id: it.id,
+    item: it,
+    pointerId: e.pointerId,
+    el: tile,
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    control: e.target.closest('.qs-btn')?.dataset.qs || null,
+    longPressed: false,
+    moved: false,
+    timer: 0
+  };
+
+  tile.classList.add('is-pressed');
+  gesture.timer = setTimeout(() => {
+    if (gesture && gesture.mode === 'tile' && !gesture.moved) {
+      gesture.longPressed = true;
+      initDrag(gesture.el, gesture.item, {
+        fromMenu: false,
+        clientX: gesture.lastX,
+        clientY: gesture.lastY
+      });
+    }
+  }, LONG_PRESS);
+});
+
+grid.addEventListener('pointermove', e => {
+  if (!gesture || e.pointerId !== gesture.pointerId) return;
+
+  if (gesture.mode === 'tile') {
+    gesture.lastX = e.clientX;
+    gesture.lastY = e.clientY;
+
+    if (!gesture.longPressed) {
+      if (Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) > TAP_SLOP) {
+        gesture.moved = true;
+        cancelGesture();
+      }
+      return;
+    }
+
+    if (drag) {
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      scheduleFrame();
+    }
+    return;
+  }
+
+  const up = gesture.lastY - e.clientY;
+  gesture.lastY = e.clientY;
+  const max = Math.max(0, grid.offsetHeight - viewport.clientHeight);
+  const atTop = viewport.scrollTop <= 0;
+  const atBottom = viewport.scrollTop >= max - 1;
+
+  if (max === 0 || (up > 0 && (atTop || atBottom))) {
+    gesture.up += Math.max(0, up);
+    if (gesture.up > 60 && Math.abs(e.clientX - gesture.x) < 50) {
+      cancelGesture();
+      openGallery();
+    }
+  } else {
+    viewport.scrollTop = clamp(viewport.scrollTop + up, 0, max);
+  }
+});
+
+grid.addEventListener('pointerup', e => {
+  if (!gesture || e.pointerId !== gesture.pointerId) return;
+  clearTimeout(gesture.timer);
+
+  if (gesture.mode === 'tile') {
+    if (gesture.longPressed) {
+      finishDrag(e.clientX, e.clientY);
+    } else if (!gesture.moved) {
+      tiles.get(gesture.id)?.classList.remove('is-pressed');
+      if (gesture.control) toggleQS(gesture.control);
+      else if (gesture.item.type === 'app') openApp(gesture.item.app);
+      else haptic(5);
+    }
+  }
+
+  releaseCapture(gesture.pointerId);
+  gesture = null;
+});
+
+grid.addEventListener('pointercancel', cancelGesture);
+grid.addEventListener('lostpointercapture', e => {
+  if (gesture && e.pointerId === gesture.pointerId) cancelGesture();
+});
+
+screenEl.addEventListener('contextmenu', e => {
+  if (e.target.closest('.grid')) e.preventDefault();
+});
+
+window.addEventListener('blur', cancelAllGestures);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) cancelAllGestures();
+});
+
+function toggleQS(id) {
+  qsState[id] = !qsState[id];
+  const btn = grid.querySelector(`.qs-btn[data-qs="${id}"]`);
+  if (btn) {
+    btn.classList.toggle('is-on', qsState[id]);
+    btn.setAttribute('aria-pressed', String(!!qsState[id]));
+  }
+  haptic(6);
+  save();
+}
+
+/* ═══════════════════════════════════════════════
+   11. APP VIEW
+   ═══════════════════════════════════════════════ */
+const APP_SCREENS = {
+  messages: () => `
+    <div class="msg-search-wrap">
+      <div class="msg-search-bar">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <span>Поиск</span>
+      </div>
+    </div>
+    <div class="msg-list">
+      <div class="msg-item">
+        <div class="msg-avatar" style="background:linear-gradient(135deg,#34d399,#047857)">А</div>
+        <div class="msg-body">
+          <div class="msg-top"><span class="msg-name">Алексей</span><span class="msg-time">12:42</span></div>
+          <div class="msg-preview">Привет! Посмотри новый прототип</div>
+        </div>
+        <span class="msg-badge">2</span>
+      </div>
+      <div class="msg-item">
+        <div class="msg-avatar" style="background:linear-gradient(135deg,#7cc8ff,#3574d6)">К</div>
+        <div class="msg-body">
+          <div class="msg-top"><span class="msg-name">Команда</span><span class="msg-time">11:08</span></div>
+          <div class="msg-preview">Отчёт готов к ревью, проверь пожалуйста</div>
+        </div>
+      </div>
+      <div class="msg-item">
+        <div class="msg-avatar" style="background:linear-gradient(135deg,#ff9966,#d32f2f)">М</div>
+        <div class="msg-body">
+          <div class="msg-top"><span class="msg-name">Мария</span><span class="msg-time">вчера</span></div>
+          <div class="msg-preview">Созвон в 15:00 не забудь</div>
+        </div>
+      </div>
+      <div class="msg-item">
+        <div class="msg-avatar" style="background:linear-gradient(135deg,#a78bfa,#7c3aed)">Д</div>
+        <div class="msg-body">
+          <div class="msg-top"><span class="msg-name">Дизайн-группа</span><span class="msg-time">вчера</span></div>
+          <div class="msg-preview">Обновил макеты в Figma</div>
+        </div>
+        <span class="msg-badge">5</span>
+      </div>
+      <div class="msg-item">
+        <div class="msg-avatar" style="background:linear-gradient(135deg,#fbbf24,#b45309)">Б</div>
+        <div class="msg-body">
+          <div class="msg-top"><span class="msg-name">Банк</span><span class="msg-time">пн</span></div>
+          <div class="msg-preview">Платёж 2 500 ₽ проведён</div>
+        </div>
+      </div>
+    </div>`,
+
+  browser: () => `
+    <div class="browser-search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <span>Поиск или адрес</span>
+    </div>
+    <div class="browser-section-title">Избранное</div>
+    <div class="browser-favs">
+      <div class="browser-fav"><div class="fav-icon">🌐</div><span>DirectFlow</span></div>
+      <div class="browser-fav"><div class="fav-icon">📰</div><span>Новости</span></div>
+      <div class="browser-fav"><div class="fav-icon">🎬</div><span>Видео</span></div>
+      <div class="browser-fav"><div class="fav-icon">🛒</div><span>Магазин</span></div>
+      <div class="browser-fav"><div class="fav-icon">📧</div><span>Почта</span></div>
+      <div class="browser-fav"><div class="fav-icon">🎵</div><span>Музыка</span></div>
+      <div class="browser-fav"><div class="fav-icon">📚</div><span>Книги</span></div>
+      <div class="browser-fav"><div class="fav-icon">⚙️</div><span>Настройки</span></div>
+    </div>
+    <div class="browser-tabs">
+      <div class="browser-tab-thumb"></div>
+      <div class="browser-tab-info">
+        <b>DirectFlow shell</b>
+        <span>directflow.local</span>
+      </div>
+    </div>`,
+
+  camera: () => `
+    <div class="camera-view">
+      <div class="camera-modes">
+        <span>Видео</span><span class="active">Фото</span><span>Портрет</span><span>Ночной</span>
+      </div>
+      <div class="camera-controls">
+        <div class="camera-thumb"></div>
+        <button class="camera-shutter" aria-label="Снять"></button>
+        <button class="camera-flip" aria-label="Переключить">
+          <svg viewBox="0 0 24 24"><path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm1-6.5V9h-2v2.5H8.5l3.5 3.5 3.5-3.5H13z"/></svg>
+        </button>
+      </div>
+    </div>`,
+
+  music: () => `
+    <div class="music-player">
+      <div class="music-art">
+        <svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
+      </div>
+      <div class="music-title">Midnight Drive</div>
+      <div class="music-artist">Neon Waves</div>
+      <div class="music-progress"></div>
+      <div class="music-times"><span>1:18</span><span>-2:24</span></div>
+      <div class="music-controls">
+        <button class="music-btn" aria-label="Предыдущий">
+          <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button class="music-btn primary" aria-label="Играть">
+          <svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>
+        </button>
+        <button class="music-btn" aria-label="Следующий">
+          <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+        </button>
+      </div>
+    </div>`
+};
+
+function appContent(key) {
+  return APP_SCREENS[key] ? APP_SCREENS[key]() : '';
+}
+
+/* ═══════════════════════════════════════════════
+   11.1 APP TRANSITION
+   ═══════════════════════════════════════════════ */
+const appSlideDir = () => mirrorMode ? '100%' : '-100%';
+
+function appAnimIn() {
+  const dir = appSlideDir();
+  const anim = appEl.animate(
+    [{ transform: `translateX(${dir})` }, { transform: 'translateX(0)' }],
+    { duration: APP_SLIDE_MS, easing: EASE, fill: 'forwards' }
+  );
+  anim.onfinish = () => anim.cancel();
+}
+
+function appAnimOut(fromTransform, onDone) {
+  const dir = appSlideDir();
+  const from = fromTransform || getComputedStyle(appEl).transform;
+  const anim = appEl.animate(
+    [{ transform: from }, { transform: `translateX(${dir})` }],
+    { duration: 260, easing: EASE, fill: 'forwards' }
+  );
+  anim.onfinish = () => {
+    anim.cancel();
+    appEl.hidden = true;
+    if (typeof onDone === 'function') onDone();
+  };
+}
+
+function openApp(key) {
+  const a = APPS[key];
+  if (!a || state !== STATE.IDLE || drag || committing) return;
+
+  currentApp = key;
+  addToRecents(key);
+
+  appBody.className = 'app-body app-body--' + key;
+  appBody.innerHTML = appContent(key);
+  appEl.style.transform = '';
+  appEl.style.opacity = '';
+  appEl.hidden = false;
+
+  void appEl.offsetWidth;
+  appAnimIn();
+
+  setState(STATE.APP);
+  haptic(8);
+}
+
+function closeApp(onDone) {
+  if (state !== STATE.APP || closing) return;
+  closing = true;
+
+  appEl.style.transform = '';
+  appEl.style.opacity = '';
+
+  appAnimOut(null, () => {
+    closing = false;
+    currentApp = null;
+    setState(STATE.IDLE);
+    haptic(10);
+    if (typeof onDone === 'function') onDone();
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   11.5 RECENTS
+   ═══════════════════════════════════════════════ */
+let recents = [];
+let recentsOpen = false;
+let recentsDirty = false;
+let recentsRenderTimer = 0;
+let recentsGesture = null;
+let recentsCloseGesture = null;
+let cardGesture = null;
+
+const recentsDock = $('#recentsDock');
+const recentsList = $('#recentsList');
+const recentsBackdrop = $('#recentsBackdrop');
+const zoneLeft = $('#zoneLeft');
+const giLeft = $('#giLeft');
+
+/* Планирует фоновый рендер: пока панель открыта — ждёт закрытия,
+   после закрытия — обновляет DOM через длительность transition. */
+function scheduleRecentsRender() {
+  clearTimeout(recentsRenderTimer);
+  if (recentsOpen) return;
+  recentsRenderTimer = setTimeout(() => {
+    if (recentsOpen) return;
+    if (recentsDirty) renderRecents();
+  }, RECENTS_TRANSITION_MS + 30);
+}
+
+function addToRecents(appKey) {
+  if (!APPS[appKey]) return;
+  const idx = recents.indexOf(appKey);
+  if (idx >= 0) recents.splice(idx, 1);
+  recents.push(appKey);
+  recentsDirty = true;
+  save();
+  scheduleRecentsRender();
+}
+
+function renderRecents() {
+  if (!recentsList) return;
+  recentsList.innerHTML = '';
+
+  if (recents.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'recents-empty';
+    empty.textContent = 'Нет недавних приложений';
+    recentsList.appendChild(empty);
+    recentsDirty = false;
+    return;
+  }
+
+  for (const appKey of recents) {
+    const a = APPS[appKey];
+    if (!a) continue;
+    const card = document.createElement('div');
+    card.className = 'recent-card';
+    card.dataset.app = appKey;
+    card.innerHTML = `
+      <div class="recent-thumb">
+        <div class="recent-screen app-body app-body--${appKey}">${appContent(appKey)}</div>
+      </div>
+      <div class="recent-info">
+        <div class="recent-icon">${a.icon}</div>
+        <div class="recent-title">${a.name}</div>
+      </div>`;
+    card.addEventListener('pointerdown', handleCardPointerDown);
+    card.addEventListener('pointermove', handleCardPointerMove);
+    card.addEventListener('pointerup', handleCardPointerUp);
+    card.addEventListener('pointercancel', handleCardPointerUp);
+    recentsList.appendChild(card);
+  }
+  recentsDirty = false;
+}
+
+function setRecentsTransform(progress) {
+  const p = clamp(progress, 0, 1);
+  recentsDock.style.transform = mirrorMode
+    ? `translateX(${(1 - p) * 100}%)`
+    : `translateX(${(p - 1) * 100}%)`;
+}
+
+function openRecents() {
+  if (recentsOpen) return;
+  if (state === STATE.MENU) return;
+
+  // Если панель открывается, а массив изменён, но рендер ещё не выполнен —
+  // применяем синхронно ДО is-open, чтобы слайд-ин показывал уже свежий список.
+  clearTimeout(recentsRenderTimer);
+  if (recentsDirty) renderRecents();
+
+  recentsOpen = true;
+  recentsList.scrollTop = recentsList.scrollHeight;
+  recentsDock.classList.remove('is-direct');
+  recentsDock.style.transform = '';
+  recentsDock.classList.add('is-open');
+  recentsDock.setAttribute('aria-hidden', 'false');
+  recentsBackdrop.classList.add('is-on');
+  document.body.classList.add('recents-open');
+  haptic(8);
+}
+
+function closeRecents() {
+  if (!recentsOpen) return;
+  recentsOpen = false;
+  recentsDock.classList.remove('is-open');
+  recentsDock.style.transform = '';
+  recentsDock.setAttribute('aria-hidden', 'true');
+  recentsBackdrop.classList.remove('is-on');
+  document.body.classList.remove('recents-open');
+
+  // Если что-то накопилось во время открытой панели — рендер после закрытия.
+  scheduleRecentsRender();
+}
+
+function openFromRecents(appKey) {
+  if (!APPS[appKey] || drag || committing) return;
+
+    // Приложение уже открыто — просто закрываем панель, без повторного слайда.
+  if (state === STATE.APP && currentApp === appKey) {
+      closeRecents();
+      haptic(6);
+      return;
+  }
+
+  let ghostApp = null;
+
+  if (state === STATE.APP) {
+    ghostApp = appEl.cloneNode(true);
+    ghostApp.removeAttribute('id');
+    ghostApp.hidden = false;
+    ghostApp.style.position = 'absolute';
+    ghostApp.style.inset = '0';
+    ghostApp.style.zIndex = '190';
+    ghostApp.style.pointerEvents = 'none';
+    ghostApp.style.willChange = 'auto';
+    ghostApp.style.transform = 'none';
+    ghostApp.style.opacity = '1';
+
+    screenEl.appendChild(ghostApp);
+    void ghostApp.offsetWidth;
+
+    appEl.getAnimations().forEach(a => a.cancel());
+    appEl.hidden = true;
+    appEl.style.transform = '';
+    appEl.style.opacity = '';
+    closing = false;
+    currentApp = null;
+    setState(STATE.IDLE);
+  }
+
+  closeRecents();
+  openApp(appKey);
+
+  if (ghostApp) {
+    setTimeout(() => ghostApp.remove(), GHOST_LIFETIME_MS);
+  }
+}
+
+function handleCardPointerDown(e) {
+  if (!recentsOpen) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const card = e.currentTarget;
+  try { card.setPointerCapture(e.pointerId); } catch (_) {}
+  cardGesture = {
+    pointerId: e.pointerId,
+    card,
+    app: card.dataset.app,
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastTime: performance.now(),
+    velocity: 0,
+    axis: null,
+    moved: false
+  };
+}
+
+function handleCardPointerMove(e) {
+  if (!cardGesture || e.pointerId !== cardGesture.pointerId) return;
+  const g = cardGesture;
+  const dx = e.clientX - g.startX;
+  const dy = e.clientY - g.startY;
+
+  if (!g.axis) {
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+      g.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      g.moved = true;
+    }
+  }
+
+  if (g.axis === 'x') {
+    const dir = mirrorMode ? -dx : dx;
+    if (dir > 0) {
+      g.card.style.transform = `translateX(${dir}px)`;
+      g.card.style.opacity = String(clamp(1 - dir / 220, 0.3, 1));
+      if (e.cancelable) e.preventDefault();
+    }
+  }
+
+  const now = performance.now();
+  const dt = now - g.lastTime;
+  if (dt > 0) g.velocity = (e.clientX - g.lastX) / dt;
+  g.lastX = e.clientX;
+  g.lastTime = now;
+}
+
+function handleCardPointerUp(e) {
+  if (!cardGesture) return;
+  const g = cardGesture;
+  cardGesture = null;
+  try { g.card.releasePointerCapture(g.pointerId); } catch (_) {}
+
+  const dx = e.clientX - g.startX;
+  const dir = mirrorMode ? -dx : dx;
+
+  if (g.axis === 'x' && (dir > 80 || g.velocity > 0.4)) {
+    const appKey = g.app;
+    g.card.classList.add('removing');
+    g.card.style.transform = '';
+    g.card.style.opacity = '';
+    haptic(12);
+    if (appKey === currentApp) closeApp();
+    setTimeout(() => {
+      recents = recents.filter(a => a !== appKey);
+      // Прямое действие пользователя внутри панели — рендерим сразу,
+      // иначе карточка «зависнет» на экране.
+      renderRecents();
+      recentsList.scrollTop = recentsList.scrollHeight;
+      save();
+    }, 260);
+  } else if (!g.moved) {
+    openFromRecents(g.app);
+  } else {
+    g.card.style.transform = '';
+    g.card.style.opacity = '';
+  }
+}
+
+zoneLeft.addEventListener('pointerdown', e => {
+  if (recentsOpen || state === STATE.MENU) return;
+  if (drag || committing || closing) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  try { zoneLeft.setPointerCapture(e.pointerId); } catch (_) {}
+  recentsGesture = {
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    lastX: e.clientX,
+    lastTime: performance.now(),
+    velocity: 0
+  };
+  recentsDock.classList.add('is-direct');
+  giLeft.classList.add('is-on');
+});
+
+zoneLeft.addEventListener('pointermove', e => {
+  if (!recentsGesture || e.pointerId !== recentsGesture.pointerId) return;
+  const g = recentsGesture;
+  const dxRaw = mirrorMode ? (g.startX - e.clientX) : (e.clientX - g.startX);
+  const width = recentsDock.offsetWidth || screenEl.offsetWidth * 0.55;
+  setRecentsTransform(dxRaw / width);
+
+  const now = performance.now();
+  const dt = now - g.lastTime;
+  if (dt > 0) {
+    let v = (e.clientX - g.lastX) / dt;
+    if (mirrorMode) v = -v;
+    g.velocity = v;
+  }
+  g.lastX = e.clientX;
+  g.lastTime = now;
+});
+
+function endRecentsOpenGesture(e) {
+  if (!recentsGesture) return;
+  const g = recentsGesture;
+  recentsGesture = null;
+  giLeft.classList.remove('is-on');
+
+  const dxRaw = mirrorMode ? (g.startX - e.clientX) : (e.clientX - g.startX);
+  const width = recentsDock.offsetWidth || screenEl.offsetWidth * 0.55;
+  const progress = dxRaw / width;
+
+  recentsDock.classList.remove('is-direct');
+  recentsDock.style.transform = '';
+
+  if (progress > 0.3 || g.velocity > 0.4) {
+    openRecents();
+  }
+}
+
+zoneLeft.addEventListener('pointerup', endRecentsOpenGesture);
+zoneLeft.addEventListener('pointercancel', endRecentsOpenGesture);
+
+recentsDock.addEventListener('pointerdown', e => {
+  if (!recentsOpen) return;
+  if (e.target.closest('.recent-card')) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  recentsCloseGesture = {
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastTime: performance.now(),
+    velocity: 0,
+    axis: null,
+    moved: false
+  };
+});
+
+recentsDock.addEventListener('pointermove', e => {
+  if (!recentsCloseGesture || e.pointerId !== recentsCloseGesture.pointerId) return;
+  const g = recentsCloseGesture;
+  const dx = e.clientX - g.startX;
+  const dy = e.clientY - g.startY;
+
+  if (!g.axis) {
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      g.axis = 'x';
+      g.moved = true;
+      try { recentsDock.setPointerCapture(g.pointerId); } catch (_) {}
+      recentsDock.classList.add('is-direct');
+    } else if (Math.abs(dy) > 10) {
+      g.axis = 'y';
+      g.moved = true;
+      recentsCloseGesture = null;
+      return;
+    }
+  }
+
+  if (g.axis === 'x') {
+    const width = recentsDock.offsetWidth;
+    const dir = mirrorMode ? -dx : dx;
+    if (dir < 0) setRecentsTransform(1 + dir / width);
+    if (e.cancelable) e.preventDefault();
+  }
+
+  const now = performance.now();
+  const dt = now - g.lastTime;
+  if (dt > 0) g.velocity = (e.clientX - g.lastX) / dt;
+  g.lastX = e.clientX;
+  g.lastTime = now;
+});
+
+recentsDock.addEventListener('pointerup', e => {
+  if (!recentsCloseGesture) return;
+  const g = recentsCloseGesture;
+  recentsCloseGesture = null;
+
+  const dx = e.clientX - g.startX;
+  const width = recentsDock.offsetWidth;
+  const dir = mirrorMode ? -dx : dx;
+
+  recentsDock.classList.remove('is-direct');
+  recentsDock.style.transform = '';
+
+  if (g.axis === 'x' && (dir < -width * 0.3 || g.velocity < -0.4)) {
+    closeRecents();
+  }
+});
+
+recentsDock.addEventListener('pointercancel', () => {
+  if (!recentsCloseGesture) return;
+  recentsCloseGesture = null;
+  recentsDock.classList.remove('is-direct');
+  recentsDock.style.transform = '';
+});
+
+recentsBackdrop.addEventListener('click', closeRecents);
+
+/* ═══════════════════════════════════════════════
+   12. GALLERY
+   ═══════════════════════════════════════════════ */
+function buildGallery(filter = '') {
+  const q = filter.trim().toLowerCase();
+
+  const sections = [
+    { title: 'Связь',          apps: ['messages'],         types: [] },
+    { title: 'Медиа',          apps: ['camera', 'music'],  types: [] },
+    { title: 'Система',        apps: ['browser'],          types: ['quick', 'notifications'] },
+    { title: 'Погода и время', apps: [],                   types: ['weather', 'clock'] }
+  ];
+
+  galleryBody.innerHTML = '';
+
+  for (const sec of sections) {
+    const matchedApps = sec.apps.filter(k => {
+      const a = APPS[k];
+      return a && (a.name + ' ' + (a.tags || '')).toLowerCase().includes(q);
+    });
+    const matchedTypes = sec.types.filter(t => {
+      const m = TYPES[t];
+      return m && (m.name + ' ' + (m.tags || '')).toLowerCase().includes(q);
+    });
+    if (!matchedApps.length && !matchedTypes.length) continue;
+
+    const sectionEl = document.createElement('div');
+    sectionEl.className = 'gallery-section';
+    sectionEl.innerHTML = `<h4>${sec.title}</h4>`;
+
+    const gridEl = document.createElement('div');
+    gridEl.className = 'gallery-grid';
+
+    for (const appKey of matchedApps) {
+      gridEl.appendChild(createGalleryTile({ type: 'app', app: appKey, w: 1, h: 1 }));
+    }
+    for (const t of matchedTypes) {
+      const type = TYPES[t];
+      gridEl.appendChild(createGalleryTile({ type: t, w: type.w, h: type.h }));
+    }
+
+    sectionEl.appendChild(gridEl);
+    galleryBody.appendChild(sectionEl);
+  }
+
+  const note = document.createElement('p');
+  note.className = 'gallery-note';
+  note.textContent = 'Перетащите ярлык или виджет на рабочий стол';
+  galleryBody.appendChild(note);
+
+  tick();
+}
+
+function galleryItemFromTile(tile) {
+  const appKey = tile.dataset.app;
+  const type = tile.dataset.type;
+
+  if (appKey) {
+    if (!APPS[appKey]) return null;
+    return { id: 'app-' + appKey + '-' + Date.now(), type: 'app', app: appKey, w: 1, h: 1 };
+  }
+  if (type) {
+    const t = TYPES[type];
+    if (!t) return null;
+    return { id: type + '-' + Date.now(), type, w: t.w, h: t.h };
+  }
+  return null;
+}
+
+function handleGalleryPointerDown(e) {
+  if (state !== STATE.MENU || drag || committing) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+  const tile = e.target.closest('.gallery-tile');
+  if (!tile) return;
+  if (e.pointerType === 'mouse') e.preventDefault();
+
+  const itemData = galleryItemFromTile(tile);
+  if (!itemData) return;
+
+  const used = items.reduce((s, i) => s + i.w * i.h, 0);
+  if (used + itemData.w * itemData.h > COLS * ROWS) {
+    toast('На столе нет места');
+    haptic(10);
+    return;
+  }
+
+  try { galleryBody.setPointerCapture(e.pointerId); } catch (err) {}
+
+  const r = tile.getBoundingClientRect();
+  const s = screenScale();
+
+  galleryGesture = {
+    item: itemData,
+    pointerId: e.pointerId,
+    el: tile,
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    grabX: (e.clientX - r.left) / s,
+    grabY: (e.clientY - r.top) / s,
+    startScroll: galleryBody.scrollTop,
+    longPressed: false,
+    moved: false,
+    timer: 0
+  };
+
+  tile.classList.add('is-pressed');
+  galleryGesture.timer = setTimeout(() => {
+    if (galleryGesture && !galleryGesture.moved) {
+      galleryGesture.longPressed = true;
+      initDrag(galleryGesture.el, galleryGesture.item, {
+        fromMenu: true,
+        clientX: galleryGesture.lastX,
+        clientY: galleryGesture.lastY
+      });
+    }
+  }, LONG_PRESS);
+}
+
+galleryBody.addEventListener('pointermove', e => {
+  if (!galleryGesture || e.pointerId !== galleryGesture.pointerId) return;
+
+  galleryGesture.lastX = e.clientX;
+  galleryGesture.lastY = e.clientY;
+
+  if (!galleryGesture.longPressed) {
+    const dx = e.clientX - galleryGesture.startX;
+    const dy = e.clientY - galleryGesture.startY;
+
+    if (Math.hypot(dx, dy) > TAP_SLOP) {
+      galleryGesture.moved = true;
+      clearTimeout(galleryGesture.timer);
+      galleryGesture.el.classList.remove('is-pressed');
+
+      const isPull = dy > 0 && Math.abs(dy) > Math.abs(dx);
+      const isMouse = e.pointerType === 'mouse';
+      const pid = galleryGesture.pointerId;
+      const startY = galleryGesture.startY;
+      const startScroll = galleryGesture.startScroll;
+      const height = gallery.offsetHeight;
+
+      if (isPull && startScroll <= 0) {
+        galleryGesture = null;
+        if (isMouse) {
+          mousePull = { pointerId: pid, startY, startScroll: 0, height, offset: dy, mode: 'pull' };
+        } else {
+          touchPull = { startY, startScroll: 0, height, offset: dy, mode: 'pull' };
+        }
+        gallery.classList.add('is-direct');
+        gallery.style.transform = `translateY(${dy}px)`;
+        return;
+      }
+
+      if (isMouse) {
+        galleryGesture = null;
+        mousePull = { pointerId: pid, startY, startScroll, height, offset: 0, mode: 'native' };
+        galleryBody.scrollTop = Math.max(0, startScroll - dy);
+        return;
+      }
+
+      releaseCapture(pid);
+      galleryGesture = null;
+    }
+    return;
+  }
+
+  if (drag) {
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    scheduleFrame();
+  }
+});
+
+galleryBody.addEventListener('pointerup', e => {
+  if (!galleryGesture || e.pointerId !== galleryGesture.pointerId) return;
+  clearTimeout(galleryGesture.timer);
+
+  if (galleryGesture.longPressed) {
+    finishDrag(e.clientX, e.clientY);
+  } else if (!galleryGesture.moved) {
+    galleryGesture.el.classList.remove('is-pressed');
+    haptic(5);
+  }
+
+  releaseCapture(galleryGesture.pointerId);
+  galleryGesture = null;
+});
+
+galleryBody.addEventListener('pointercancel', () => {
+  if (!galleryGesture) return;
+  clearTimeout(galleryGesture.timer);
+  galleryGesture.el.classList.remove('is-pressed');
+  releaseCapture(galleryGesture.pointerId);
+  galleryGesture = null;
+  if (drag && drag.fromMenu) abortDrag();
+});
+
+function sheetRelease(offset, height) {
+  if (offset > height / 2) closeGallery();
+  else {
+    gallery.classList.remove('is-direct');
+    gallery.style.transform = '';
+  }
+}
+
+gallery.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  if (state !== STATE.MENU || drag || committing || galleryGesture || touchPull) return;
+  if (e.target.closest('input, button')) return;
+  const t = e.touches[0];
+  touchPull = {
+    startY: t.clientY,
+    startScroll: galleryBody.scrollTop,
+    height: gallery.offsetHeight,
+    offset: 0,
+    mode: 'pending'
+  };
+}, { passive: true });
+
+gallery.addEventListener('touchmove', e => {
+  if (drag) { e.preventDefault(); return; }
+  if (!touchPull || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const dy = t.clientY - touchPull.startY;
+
+  if (touchPull.mode === 'pending') {
+    if (dy > 0 && touchPull.startScroll <= 0) {
+      e.preventDefault();
+      touchPull.mode = 'pull';
+      gallery.classList.add('is-direct');
+    } else if (Math.abs(dy) > 6) {
+      touchPull = null;
+      return;
+    }
+    if (touchPull.mode === 'pending') return;
+  }
+  if (touchPull && touchPull.mode === 'pull') {
+    e.preventDefault();
+    touchPull.offset = Math.max(0, dy);
+    gallery.style.transform = `translateY(${touchPull.offset}px)`;
+  }
+}, { passive: false });
+
+gallery.addEventListener('touchend', () => {
+  if (!touchPull) return;
+  const tp = touchPull;
+  touchPull = null;
+  if (tp.mode === 'pull') sheetRelease(tp.offset, tp.height);
+});
+
+gallery.addEventListener('touchcancel', () => {
+  if (!touchPull) return;
+  touchPull = null;
+  gallery.classList.remove('is-direct');
+  gallery.style.transform = '';
+});
+
+gallery.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return;
+  if (state !== STATE.MENU || drag || committing || galleryGesture || mousePull) return;
+  if (e.target.closest('input, button, .gallery-tile')) return;
+
+  mousePull = {
+    pointerId: e.pointerId,
+    startY: e.clientY,
+    startScroll: galleryBody.scrollTop,
+    height: gallery.offsetHeight,
+    offset: 0,
+    mode: 'pending'
+  };
+  try { gallery.setPointerCapture(e.pointerId); } catch (err) {}
+  e.preventDefault();
+});
+
+gallery.addEventListener('pointermove', e => {
+  if (!mousePull || e.pointerId !== mousePull.pointerId) return;
+  const dy = e.clientY - mousePull.startY;
+
+  if (mousePull.mode === 'pending') {
+    if (Math.abs(dy) < 6) return;
+    if (mousePull.startScroll <= 0 && dy > 0) {
+      mousePull.mode = 'pull';
+      gallery.classList.add('is-direct');
+    } else {
+      mousePull.mode = 'native';
+    }
+  }
+
+  if (mousePull.mode === 'pull') {
+    mousePull.offset = Math.max(0, dy);
+    gallery.style.transform = `translateY(${mousePull.offset}px)`;
+  } else if (mousePull.mode === 'native') {
+    galleryBody.scrollTop = Math.max(0, mousePull.startScroll - dy);
+  }
+  e.preventDefault();
+});
+
+gallery.addEventListener('pointerup', e => {
+  if (!mousePull || e.pointerId !== mousePull.pointerId) return;
+  const mp = mousePull;
+  mousePull = null;
+  if (mp.mode === 'pull') sheetRelease(mp.offset, mp.height);
+});
+
+gallery.addEventListener('pointercancel', e => {
+  if (!mousePull || e.pointerId !== mousePull.pointerId) return;
+  mousePull = null;
+  gallery.classList.remove('is-direct');
+  gallery.style.transform = '';
+});
+
+function openGallery() {
+  if (state !== STATE.IDLE || drag || committing || recentsOpen) return;
+  buildGallery(searchInput.value);
+  gallery.classList.remove('is-direct');
+  gallery.style.transform = '';
+  gallery.classList.add('is-open');
+  gallery.inert = false;
+  setState(STATE.MENU);
+  haptic(8);
+}
+
+function closeGallery() {
+  touchPull = null;
+  mousePull = null;
+  gallery.classList.remove('is-direct');
+  gallery.style.transform = '';
+  gallery.classList.remove('is-open');
+  gallery.inert = true;
+  setState(STATE.IDLE);
+}
+
+searchInput.addEventListener('input', e => buildGallery(e.target.value));
+$('#resetBtn').addEventListener('click', () => { resetDesktop(); closeGallery(); });
+dim.addEventListener('click', () => { if (state === STATE.MENU) closeGallery(); });
+
+/* ═══════════════════════════════════════════════
+   13. GESTURE ZONES
+   ═══════════════════════════════════════════════ */
+const giRight = $('#giRight');
+const giBottom = $('#giBottom');
+
+$('#zoneRight').addEventListener('pointerdown', e => {
+  if (recentsOpen) return;
+  if (state !== STATE.APP || drag || committing || closing) return;
+  if (buttonsMode) return;
+  edge = { mode: 'right', x: e.clientX, id: e.pointerId };
+  $('#zoneRight').setPointerCapture(e.pointerId);
+  giRight.classList.add('is-on');
+  appEl.style.transition = 'none';
+  haptic(6);
+});
+
+$('#zoneRight').addEventListener('pointermove', e => {
+  if (!edge || edge.mode !== 'right') return;
+  const dx = mirrorMode ? Math.max(0, e.clientX - edge.x) : Math.min(0, e.clientX - edge.x);
+  appEl.style.transform = `translateX(${dx}px)`;
+});
+
+function endRight(e) {
+  if (!edge || edge.mode !== 'right') return;
+
+  const dx = mirrorMode ? Math.max(0, e.clientX - edge.x) : Math.min(0, e.clientX - edge.x);
+  giRight.classList.remove('is-on');
+  appEl.style.transition = '';
+
+  const from = getComputedStyle(appEl).transform;
+  appEl.style.transform = '';
+
+  const threshold = screenEl.offsetWidth * .28;
+  if (Math.abs(dx) > threshold || Math.abs(dx) > 60) {
+    closing = true;
+    appAnimOut(from, () => {
+      closing = false;
+      currentApp = null;
+      setState(STATE.IDLE);
+      haptic(10);
+    });
+  } else {
+    appEl.animate(
+      [{ transform: from }, { transform: 'translateX(0)' }],
+      { duration: 220, easing: EASE }
+    );
+  }
+  edge = null;
+}
+
+$('#zoneRight').addEventListener('pointerup', endRight);
+$('#zoneRight').addEventListener('pointercancel', () => {
+  if (!edge) return;
+  giRight.classList.remove('is-on');
+  appEl.style.transition = '';
+  appEl.style.transform = '';
+  edge = null;
+});
+
+$('#zoneBottom').addEventListener('pointerdown', () => {
+  if (drag || committing) return;
+  if (buttonsMode) return;
+  if (recentsOpen) return;
+  if (state === STATE.IDLE) { openGallery(); return; }
+  edge = { mode: 'bottom' };
+  giBottom.classList.add('is-on');
+});
+
+$('#zoneBottom').addEventListener('pointerup', () => {
+  if (!edge || edge.mode !== 'bottom') return;
+  giBottom.classList.remove('is-on');
+  if (state === STATE.APP) closeApp();
+  edge = null;
+});
+
+$('#zoneBottom').addEventListener('pointercancel', () => {
+  giBottom.classList.remove('is-on');
+  edge = null;
+});
+
+/* ═══════════════════════════════════════════════
+   14. NAV BUTTONS
+   ═══════════════════════════════════════════════ */
+$('#navHome').addEventListener('click', () => {
+  if (recentsOpen) { closeRecents(); return; }
+  if (state === STATE.APP) closeApp();
+  else if (state === STATE.MENU) closeGallery();
+});
+$('#navBack').addEventListener('click', () => {
+  if (recentsOpen) { closeRecents(); return; }
+  if (state === STATE.APP) closeApp();
+  else if (state === STATE.MENU) closeGallery();
+});
+$('#navRecents').addEventListener('click', () => {
+  if (recentsOpen) closeRecents();
+  else if (state === STATE.IDLE || state === STATE.APP) openRecents();
+});
+
+/* ═══════════════════════════════════════════════
+   15. CLOCK & FIT
+   ═══════════════════════════════════════════════ */
+function tick() {
+  const now = new Date();
+  const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  $('#statusTime').textContent = time;
+  document.querySelectorAll('.live-time').forEach(el => el.textContent = time);
+}
+
+function fit() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const isLandscape = vw > vh && vw >= 900;
+
+  let scale;
+  if (isLandscape) {
+    const availableWidth = vw - 80 - 272 - 40;
+    const availableHeight = vh - 60;
+    scale = Math.min(availableWidth / 400, availableHeight / 760, 1);
+  } else {
+    const availableHeight = vh - 40;
+    scale = Math.min(1, availableHeight / 760, (vw - 40) / 400);
+  }
+  scale = Math.max(0.3, scale);
+  stage.style.transform = `scale(${scale})`;
+}
+
+window.addEventListener('resize', fit);
+window.addEventListener('orientationchange', fit);
+
+/* ═══════════════════════════════════════════════
+   16. PANEL TOGGLES
+   ═══════════════════════════════════════════════ */
+function setMirrorMode(on) {
+  mirrorMode = on;
+  document.body.classList.toggle('mirror', on);
+  $('#tMirror').classList.toggle('on', on);
+  $('#lblHome').textContent = on ? 'левый край →' : 'правый край ←';
+  $('#lblRecents').textContent = on ? 'правый край ←' : 'левый край →';
+  save();
+}
+
+function setButtonsMode(on) {
+  buttonsMode = on;
+  document.body.classList.toggle('buttons-mode', on);
+  $('#tButtons').classList.toggle('on', on);
+  save();
+}
+
+$('#tMirror').addEventListener('click', () => setMirrorMode(!mirrorMode));
+$('#tButtons').addEventListener('click', () => setButtonsMode(!buttonsMode));
+
+/* ═══════════════════════════════════════════════
+   17. INIT
+   ═══════════════════════════════════════════════ */
+const saved = load();
+items = saved ? saved.items : defaultItems();
+positions = saved ? saved.positions : pack(items);
+recents = saved ? (saved.recents || []) : [];
+
+mountItems();
+applyLayout(positions, true);
+buildGallery();
+renderRecents();
+tick();
+setInterval(tick, 10000);
+fit();
+setState(STATE.IDLE);
+
+if (saved) {
+  setMirrorMode(saved.mirror);
+  setButtonsMode(saved.buttons);
+}
+})();
+</script>
+</body>
+</html>
