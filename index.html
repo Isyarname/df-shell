@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>DirectFlow shell</title>
+<title>DirectFlow UI</title>
 <style>
 :root {
   --z-base: 0; --z-slot: 2; --z-tile: 3; --z-dim: 50; --z-gallery: 100; --z-app: 200;
@@ -492,7 +492,7 @@ body.buttons-mode .recents-dock { padding-bottom: 68px; }
 </head>
 <body>
 <aside class="panel">
-    <h1 style="margin-bottom:10px">Direct<span>Flow</span> shell</h1>
+    <h1 style="margin-bottom:10px">Direct<span>Flow</span> UI</h1>
     <p style="font-size:11px;line-height:1.5;color:var(--dim);margin:0 0 18px;letter-spacing:.2px">Концепт жестового интерфейса</p>
   <h3>Жесты (мышью или пальцем)</h3>
   <div class="grow"><span>Домой</span><b id="lblHome">правый край ←</b></div>
@@ -594,7 +594,7 @@ const ROW_H = 82;
 const LONG_PRESS = 450;
 const TAP_SLOP = 8;
 const EASE = 'cubic-bezier(.22,.61,.36,1)';
-const STORAGE_KEY = 'directflow.shell.v7';
+const STORAGE_KEY = 'directflow.ui.v7';
 const STORAGE_VERSION = 7;
 const STATE = Object.freeze({ IDLE: 'IDLE', MENU: 'MENU', APP: 'APP' });
 const APP_SLIDE_MS = 280;
@@ -894,7 +894,7 @@ function load() {
       recents: Array.isArray(raw.recents) ? raw.recents.filter(k => APPS[k]) : []
     };
   } catch (e) {
-    console.warn('DirectFlow shell: failed to load state', e);
+    console.warn('DirectFlow UI: failed to load state', e);
     return null;
   }
 }
@@ -1612,7 +1612,7 @@ const APP_SCREENS = {
     <div class="browser-tabs">
       <div class="browser-tab-thumb"></div>
       <div class="browser-tab-info">
-        <b>DirectFlow shell</b>
+        <b>DirectFlow UI</b>
         <span>directflow.local</span>
       </div>
     </div>`,
