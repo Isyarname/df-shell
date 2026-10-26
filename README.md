@@ -1,4 +1,4 @@
-# directFlow shell
+# directFlow UI
 
 Прототип интерфейса мобильной оболочки
 
